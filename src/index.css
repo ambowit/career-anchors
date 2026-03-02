@@ -1,0 +1,325 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        /* SCPC Career Anchors Design System */
+        /* Corporate Colors: Deep Blue #1C2857 + Green #B5D260 */
+        
+        --background: 220 20% 97%; /* Light gray-blue background */
+        --foreground: 228 51% 23%; /* #1C2857 Deep Blue as text */
+        
+        --card: 0 0% 100%; /* Pure White */
+        --card-foreground: 228 51% 23%;
+        
+        --popover: 0 0% 100%;
+        --popover-foreground: 228 51% 23%;
+        
+        --primary: 228 51% 23%; /* #1C2857 Deep Blue */
+        --primary-foreground: 0 0% 100%;
+        
+        --secondary: 75 55% 60%; /* #B5D260 Green */
+        --secondary-foreground: 228 51% 15%;
+        
+        --muted: 220 14% 92%;
+        --muted-foreground: 220 14% 46%;
+        
+        --accent: 75 55% 60%; /* Green accent */
+        --accent-foreground: 228 51% 15%;
+        
+        --destructive: 0 73% 41%; /* Critical Red */
+        --destructive-foreground: 0 0% 100%;
+        
+        --warning: 38 95% 50%; /* Amber */
+        --warning-foreground: 228 51% 15%;
+        
+        --success: 75 55% 45%; /* Darker green for success */
+        --success-foreground: 0 0% 100%;
+        
+        --border: 220 20% 88%;
+        --input: 220 20% 88%;
+        --ring: 228 51% 23%;
+        
+        --chart-1: 228 51% 23%; /* Deep Blue */
+        --chart-2: 75 55% 60%; /* Green */
+        --chart-3: 38 95% 50%; /* Amber */
+        --chart-4: 220 14% 46%; /* Slate */
+        --chart-5: 0 73% 41%; /* Red */
+        
+        --radius: 6px;
+        
+        --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --font-serif: 'Noto Serif SC', Georgia, serif;
+    }
+
+    .dark {
+        --background: 228 51% 10%;
+        --foreground: 220 20% 95%;
+        
+        --card: 228 45% 14%;
+        --card-foreground: 220 20% 95%;
+        
+        --popover: 228 45% 14%;
+        --popover-foreground: 220 20% 95%;
+        
+        --primary: 75 55% 60%; /* Green as primary in dark mode */
+        --primary-foreground: 228 51% 10%;
+        
+        --secondary: 228 45% 35%;
+        --secondary-foreground: 220 20% 95%;
+        
+        --muted: 228 30% 25%;
+        --muted-foreground: 220 14% 60%;
+        
+        --accent: 75 55% 50%;
+        --accent-foreground: 228 51% 10%;
+        
+        --destructive: 0 72% 51%;
+        --destructive-foreground: 0 0% 100%;
+        
+        --warning: 38 92% 55%;
+        --warning-foreground: 228 51% 10%;
+        
+        --success: 75 55% 55%;
+        --success-foreground: 228 51% 10%;
+        
+        --border: 228 30% 22%;
+        --input: 228 30% 22%;
+        --ring: 75 55% 60%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground antialiased;
+        font-family: var(--font-sans);
+    }
+
+    html, body {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    html::-webkit-scrollbar,
+    body::-webkit-scrollbar {
+        display: none;
+    }
+
+    * {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    *::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* PWA Safe Area Support */
+    @supports (padding-bottom: env(safe-area-inset-bottom)) {
+        .safe-area-bottom {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .safe-area-top {
+            padding-top: env(safe-area-inset-top);
+        }
+    }
+
+    /* Touch optimizations for mobile */
+    @media (max-width: 768px) {
+        button, a, [role="button"] {
+            -webkit-tap-highlight-color: transparent;
+        }
+    }
+}
+
+@layer components {
+    /* Swiss Grid System */
+    .swiss-grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 1px;
+        background-color: hsl(var(--border));
+        border: 1px solid hsl(var(--border));
+    }
+    
+    .swiss-cell {
+        background-color: hsl(var(--card));
+        padding: 24px;
+    }
+
+    /* Mobile Grid */
+    @media (max-width: 768px) {
+        .swiss-grid {
+            grid-template-columns: 1fr;
+        }
+        .swiss-cell {
+            padding: 16px;
+        }
+    }
+    
+    /* Data Labels - Uppercase tracking */
+    .data-label {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: hsl(var(--muted-foreground));
+    }
+    
+    /* Reading Body - Serif for deep reading */
+    .reading-body {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        line-height: 1.8;
+        letter-spacing: -0.01em;
+    }
+
+    @media (max-width: 768px) {
+        .reading-body {
+            font-size: 15px;
+            line-height: 1.7;
+        }
+    }
+    
+    /* Executive Summary Card */
+    .executive-card {
+        @apply bg-primary text-primary-foreground p-8;
+    }
+
+    @media (max-width: 768px) {
+        .executive-card {
+            @apply p-5;
+        }
+    }
+    
+    /* Warning Alert Block */
+    .alert-risk {
+        @apply border-l-4 border-destructive bg-destructive/5 p-6;
+    }
+    
+    /* Insight Block */
+    .alert-insight {
+        @apply border-l-4 border-warning bg-warning/5 p-6;
+    }
+
+    /* Success Block */
+    .alert-success {
+        @apply border-l-4 border-accent bg-accent/10 p-6;
+    }
+    
+    /* Info Block - Quote style */
+    .info-block {
+        @apply bg-muted/10 border-l-2 border-muted p-4;
+    }
+    
+    /* Mechanical button press */
+    .btn-mechanical {
+        @apply transition-transform duration-100;
+    }
+    .btn-mechanical:active {
+        transform: translateY(1px);
+    }
+
+    /* Mobile-optimized buttons */
+    .btn-mobile {
+        @apply min-h-[48px] px-6 text-base font-medium rounded-lg;
+        touch-action: manipulation;
+    }
+
+    /* Card with green accent */
+    .card-accent {
+        @apply bg-card border border-border rounded-lg;
+        border-left: 4px solid hsl(var(--accent));
+    }
+
+    /* Progress indicator with brand colors */
+    .progress-brand {
+        @apply h-2 bg-border rounded-full overflow-hidden;
+    }
+    .progress-brand-fill {
+        @apply h-full bg-accent transition-all duration-500;
+    }
+}
+
+@layer utilities {
+    .field-sizing-content {
+        field-sizing: content;
+    }
+    
+    /* Typography utilities */
+    .font-display {
+        font-family: var(--font-sans);
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+    }
+    
+    .font-reading {
+        font-family: var(--font-serif);
+        font-weight: 400;
+        letter-spacing: -0.01em;
+        line-height: 1.8;
+    }
+
+    /* Mobile safe area padding */
+    .safe-area-bottom {
+        padding-bottom: env(safe-area-inset-bottom, 24px);
+    }
+
+    .safe-area-top {
+        padding-top: env(safe-area-inset-top, 0);
+    }
+    
+    /* Animation - Mechanical, no bounce */
+    @keyframes data-grow {
+        0% { transform: scaleY(0); transform-origin: bottom; }
+        100% { transform: scaleY(1); transform-origin: bottom; }
+    }
+    
+    @keyframes grid-extend {
+        0% { transform: scale(0); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    
+    @keyframes fade-in {
+        0% { opacity: 0; }
+        100% { opacity: 1; }
+    }
+    
+    @keyframes slide-up {
+        0% { opacity: 0; transform: translateY(20px); }
+        100% { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse-soft {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+    
+    .animate-data-grow {
+        animation: data-grow 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    
+    .animate-grid-extend {
+        animation: grid-extend 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    
+    .animate-fade-in {
+        animation: fade-in 0.4s ease-out forwards;
+    }
+    
+    .animate-slide-up {
+        animation: slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    .animate-pulse-soft {
+        animation: pulse-soft 2s ease-in-out infinite;
+    }
+}

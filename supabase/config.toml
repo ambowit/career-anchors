@@ -1,0 +1,28 @@
+project_id = "xcgcrnwbjzpvwggxkjyz"
+
+[functions.adaptive-questions]
+verify_jwt = false
+
+[functions.personalized-analysis]
+verify_jwt = false
+
+[functions.create-user]
+verify_jwt = false
+
+[functions.certification-reminders]
+verify_jwt = false
+
+[functions.admin-reset-password]
+verify_jwt = false
+
+[functions.process-recharge]
+verify_jwt = false
+
+[functions.consume-cp]
+verify_jwt = false
+
+[functions.refund-cp]
+verify_jwt = false
+
+[functions.grant-reward]
+verify_jwt = false
