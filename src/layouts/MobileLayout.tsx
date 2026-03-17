@@ -1,27 +1,21 @@
-import { Outlet, NavLink, useLocation } from "react-router-dom";
-import { Home, ClipboardList, User, History, FileText } from "lucide-react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Home, ClipboardList, User, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
-import { useTestAuth } from "@/hooks/useTestAuth";
 import { useTranslation } from "@/hooks/useLanguage";
 import PWAInstallPrompt from "@/components/mobile/PWAInstallPrompt";
 
 export default function MobileLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { language } = useTranslation();
-  const { user } = useAuth();
-  const { isTestLoggedIn } = useTestAuth();
-
-  // Check if user is logged in (either real or test account)
-  const isLoggedIn = !!user || isTestLoggedIn;
 
   // Hide bottom nav on assessment page for immersive experience
-  const hideBottomNav = location.pathname === "/assessment";
+  const hideBottomNav = location.pathname === "/assessment" || location.pathname === "/ideal-card-test";
 
   // Localized nav items
   const navItems = [
     { path: "/", icon: Home, label: language === "en" ? "Home" : language === "zh-TW" ? "首頁" : "首页" },
-    { path: "/assessment", icon: ClipboardList, label: language === "en" ? "Assess" : language === "zh-TW" ? "測評" : "测评" },
+    { path: "/start-assessment", icon: ClipboardList, label: language === "en" ? "Assess" : language === "zh-TW" ? "測評" : "测评" },
     { path: "/history", icon: FileText, label: language === "en" ? "History" : language === "zh-TW" ? "記錄" : "记录" },
     { path: "/profile", icon: User, label: language === "en" ? "Profile" : language === "zh-TW" ? "我的" : "我的" },
   ];
@@ -41,17 +35,26 @@ export default function MobileLayout() {
         <nav className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-md border-t border-border z-50" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           <div className="flex items-center justify-around h-16">
             {navItems.map(({ path, icon: Icon, label }) => {
-              const isActive = location.pathname === path || 
-                (path !== "/" && location.pathname.startsWith(path));
-              const needsAuth = path === "/history" || path === "/profile";
+              // "start-assessment" is a virtual path — map active state to homepage
+              const activePath = path === "/start-assessment" ? null : path;
+              const isActive = activePath !== null && (
+                location.pathname === activePath ||
+                (activePath !== "/" && location.pathname.startsWith(activePath))
+              );
 
-              // If needs auth and not logged in, redirect to home (where login dropdown is)
-              const targetPath = needsAuth && !isLoggedIn ? "/" : path;
+              const handleClick = () => {
+                if (path === "/start-assessment") {
+                  // Navigate to home with state flag to trigger assessment flow
+                  navigate("/", { state: { startAssessment: true } });
+                } else {
+                  navigate(path);
+                }
+              };
 
               return (
-                <NavLink
+                <button
                   key={path}
-                  to={targetPath}
+                  onClick={handleClick}
                   className={cn(
                     "flex flex-col items-center justify-center w-16 h-full transition-colors",
                     isActive 
@@ -72,7 +75,7 @@ export default function MobileLayout() {
                   )}>
                     {label}
                   </span>
-                </NavLink>
+                </button>
               );
             })}
           </div>

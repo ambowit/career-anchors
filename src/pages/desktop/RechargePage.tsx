@@ -24,6 +24,8 @@ import { useCpWallet } from "@/hooks/useCpWallet";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { Navigate } from "react-router-dom";
 
 // --------------- i18n ---------------
 const TXT = {
@@ -113,17 +115,17 @@ const TXT = {
     confirmButton: "確認購買",
     cancelButton: "取消",
     // Processing
-    processing: "正在處理您的充值...",
+    processing: "正在處理您的儲值...",
     pleaseWait: "請勿關閉此頁面",
     // Success
-    successTitle: "充值成功！",
+    successTitle: "儲值成功！",
     successDesc: "CP 已加入您的錢包",
     cpReceived: "獲得 CP",
     newBalance: "新餘額",
     viewWallet: "查看錢包",
-    buyMore: "繼續充值",
+    buyMore: "繼續儲值",
     // Errors
-    errorGeneric: "充值失敗，請重試。",
+    errorGeneric: "儲值失敗，請重試。",
     errorRetry: "重試",
     off: "折",
   },
@@ -270,10 +272,15 @@ export default function RechargePage() {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const { user } = useAuth();
+  const { isCpPointsEnabled } = useFeaturePermissions();
   const queryClient = useQueryClient();
   const { wallet, membership } = useCpWallet();
 
   const textContent = TXT[language] || TXT["zh-TW"];
+
+  if (!isCpPointsEnabled) {
+    return <Navigate to="/" replace />;
+  }
 
   const [selectedPackage, setSelectedPackage] = useState<RechargePackage | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -496,7 +503,7 @@ export default function RechargePage() {
                   {/* Featured badge */}
                   {packageItem.is_featured && (
                     <div className="absolute -top-2.5 left-5">
-                      <Badge className="bg-amber-500 text-white border-0 shadow-md text-xs px-2.5 py-0.5 gap-1">
+                      <Badge className="bg-amber-500 text-white border-0 shadow-md text-xs px-2.5 h-6 gap-1">
                         <Star className="w-3 h-3 fill-white" />
                         {textContent.featured}
                       </Badge>

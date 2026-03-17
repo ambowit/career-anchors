@@ -68,14 +68,14 @@ export default function HRInterpretationPage() {
       ],
       
       // High-Sensitivity Anchor (Section 3)
-      primaryTitle: "高敏感锚的 HR 用法",
-      primaryDefinition: "高敏感锚不是岗位偏好，而是长期留任与有效投入的底线条件。",
+      primaryTitle: "核心锚的 HR 用法",
+      primaryDefinition: "核心锚不是岗位偏好，而是长期留任与有效投入的底线条件。",
       primaryQuestions: [
         "该岗位 / 路径的长期结构，是否会持续违反此锚？",
         "若当前暂时不匹配，是否存在明确的过渡、补偿或调整节点？",
         "如果不调整，风险更可能体现为：能力不足？态度问题？还是结构性不匹配？",
       ],
-      primaryEmphasis: "高敏感锚必须被视为『路径设计的前提条件』，而非发展选项。",
+      primaryEmphasis: "核心锚必须被视为『路径设计的前提条件』，而非发展选项。",
       
       // Conflict Anchors (Section 5)
       conflictTitle: "冲突锚的组织解读",
@@ -173,14 +173,14 @@ export default function HRInterpretationPage() {
         },
       ],
       
-      primaryTitle: "高敏感錨的 HR 用法",
-      primaryDefinition: "高敏感錨不是職位偏好，而是長期留任與有效投入的底線條件。",
+      primaryTitle: "核心錨的 HR 用法",
+      primaryDefinition: "核心錨不是職位偏好，而是長期留任與有效投入的底線條件。",
       primaryQuestions: [
         "該職位 / 路徑的長期結構，是否會持續違反此錨？",
         "若當前暫時不對應，是否存在明確的過渡、補償或調整節點？",
         "如果不調整，風險更可能體現為：能力不足？態度問題？還是結構性不對應？",
       ],
-      primaryEmphasis: "高敏感錨必須被視為『路徑設計的前提條件』，而非發展選項。",
+      primaryEmphasis: "核心錨必須被視為『路徑設計的前提條件』，而非發展選項。",
       
       conflictTitle: "衝突錨的組織解讀",
       conflictDefinition: "衝突錨不代表搖擺或不成熟，而代表在長期路徑上存在內在張力。",
@@ -273,14 +273,14 @@ export default function HRInterpretationPage() {
         },
       ],
       
-      primaryTitle: "HR Application of High-Sensitivity Anchor",
-      primaryDefinition: "The high-sensitivity anchor is not a job preference—it's the baseline condition for long-term retention and effective engagement.",
+      primaryTitle: "HR Application of Core Anchor",
+      primaryDefinition: "The core anchor is not a job preference—it's the baseline condition for long-term retention and effective engagement.",
       primaryQuestions: [
         "Will the long-term structure of this position/path continuously violate this anchor?",
         "If there's a current mismatch, are there clear transition, compensation, or adjustment points?",
         "If not adjusted, is the risk more likely to manifest as: skill gap? attitude problem? or structural mismatch?",
       ],
-      primaryEmphasis: "The high-sensitivity anchor must be treated as a 'prerequisite for path design,' not a development option.",
+      primaryEmphasis: "The core anchor must be treated as a 'prerequisite for path design,' not a development option.",
       
       conflictTitle: "Organizational Interpretation of Conflict Anchors",
       conflictDefinition: "Conflict anchors do not indicate indecision or immaturity—they represent inherent tension in the long-term path.",
@@ -378,7 +378,7 @@ export default function HRInterpretationPage() {
     <div className="min-h-screen bg-background pb-24">
       {/* Back Navigation */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <Link
             to="/results"
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -395,7 +395,7 @@ export default function HRInterpretationPage() {
 
       {/* Header Section */}
       <motion.section
-        className="pt-12 pb-10 px-6 border-b border-border bg-muted/30"
+        className="pt-12 pb-10 px-4 sm:px-6 border-b border-border bg-muted/30"
         initial={prefersReducedMotion ? {} : { opacity: 0, y: -20 }}
         animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
@@ -413,7 +413,7 @@ export default function HRInterpretationPage() {
 
       {/* Main Content */}
       <motion.div
-        className="max-w-4xl mx-auto px-6 py-10 space-y-12"
+        className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-12"
         variants={prefersReducedMotion ? undefined : containerVariants}
         {...motionProps}
       >

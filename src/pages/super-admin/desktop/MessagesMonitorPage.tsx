@@ -105,7 +105,7 @@ export default function MessagesMonitorPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
         {[
           { label: isEn ? "Total Messages" : language === "zh-TW" ? "訊息總量" : "消息总量", value: analytics.total, icon: Activity, color: "text-blue-600", bg: "bg-blue-50" },
           { label: isEn ? "Unread" : language === "zh-TW" ? "未讀訊息" : "未读消息", value: analytics.unread, icon: MailOpen, color: "text-red-600", bg: "bg-red-50" },
@@ -123,7 +123,7 @@ export default function MessagesMonitorPage() {
       </div>
 
       {/* Channel Distribution */}
-      <div className="grid grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         {Object.entries(CHANNEL_CONFIG).map(([key, config]) => {
           const count = analytics.byChannel[key] || 0;
           const Icon = config.icon;

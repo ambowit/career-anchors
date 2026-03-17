@@ -1,0 +1,278 @@
+<pagination_iron_rules>
+  <last_updated>2026-03-17</last_updated>
+  <description>PDF 分页铁律 — 所有报告类型共享的智能分页系统</description>
+
+  <rule id="1" name="data-keep-together 不可分割区域">
+    <summary>
+      任何被 data-keep-together 包裹的 DOM 区域，分页切点不得落在其内部。
+      算法选定候选切点后检查是否位于 keep-together 区域内：
+        a) 优先上移至区域顶部之前；
+        b) 若上移后页面填充率不足35%，则下移至区域底部之后；
+        c) 若区域比一页高，才允许内部切割。
+    </summary>
+    <marked_components>
+      <component>雷达图 SVG 容器 (cpc-svg-container)</component>
+      <component>四区定位图 (cpc-framework-overview)</component>
+      <component>每张维度卡片的 Banner + 进度条组合</component>
+      <component>结尾提醒块 (closing reminder)</component>
+      <component>深色职涯阶段解读块 (block-card-dark with career stage)</component>
+      <component>综合报告：Summary Cards 区域</component>
+      <component>综合报告：Part 2 深蓝色锚点解读块</component>
+      <component>融合报告：核心锚点卡、Top 3 牌卡、一致性分析块、量化指标网格</component>
+      <component>理想人生卡报告：Top 3 牌卡</component>
+      <component>理想人生卡报告：每张卡片整体（Banner + 四象限 + AI说明）</component>
+      <component>行动推荐条目：数字圆圈 + 标题 + 说明 (cpc-risk-theme)</component>
+      <component>学习方向条目：标题 + 描述 + 资源 (cpc-dev-theme)</component>
+      <component>结构角色区块：胶囊徽章 + 角色说明 (renderPill + description)</component>
+      <component>发展张力区块：虚线边框内标题 + 说明 (Development Tension)</component>
+      <component>➡️ 锚点卡片内文本段落(区域结构/核心诠释/锚点释义/风险预警/发展路径) —— 不使用data-keep-together(会导致过多空白页)，仅靠行级保护(0.8×阈值使短文本块进入textLineInfos，text snap+glyph guard防切字)</component>
+    </marked_components>
+    <implementation>
+      collectKeepTogetherZones() 在 canvas 渲染前收集所有 data-keep-together 元素的 DOM 位置，
+      转换为 mm 坐标。adjustCutForKeepTogether() 在分页循环中检查并调整切点。
+    </implementation>
+  </rule>
+
+  <rule id="2" name="自然排版，无强制分页">
+    <summary>
+      V3 报告正文不使用 data-page-break 强制切点。内容自然排列，
+      由像素扫描 + keep-together 保护自动决定分页位置。
+      避免章节间产生大面积空白页。
+      其他报告（综合报告、融合报告）保留各自的 data-page-break 设置。
+    </summary>
+    <important>
+      2026-03-06 移除了 V3 报告 body 中全部 data-page-break 标记
+      （包括章节间的6个 + 每个锚点卡片前的标记）。
+      此前每个 Part 之间都有强制分页点，导致大量空白页。
+    </important>
+  </rule>
+
+  <rule id="3" name="像素扫描仅做微调 + 硬上限">
+    <summary>
+      findSafeCutRow 搜索范围 ±12% 页高，且不得超过 maxRow 参数（新增）。
+      maxRow 设置为 PDF footer 线的像素位置，硬性防止内容溢出到 footer 区域。
+      旧的 absoluteMaxMm = usableHeight * 1.08 已废弃，
+      替换为 hardMaxSliceMm = footerLineMm - contentTopMm (≈272mm)。
+      当首次扫描结果超过硬上限时，从硬上限向上搜索 25% 页高重新定位。
+    </summary>
+  </rule>
+
+  <rule id="4" name="最小间隙标准">
+    <summary>
+      MIN_GAP >= 8 行（canvas 2× 缩放下约 16-24px 物理像素），
+      确保仅匹配真正的行间/节间空白，不匹配字符内笔画间隙。
+      "安静行"阈值: transitions ≤ 10 AND avgBrightness > 218。
+      ≤10容纳带边框卡片(1px CSS边框@2×产生4-8次跳变)，
+      旧阈值≤4在边框渲染差异下频繁失败(详见rule 9)。
+    </summary>
+  </rule>
+
+  <affected_files>
+    <file>src/lib/exportReport.ts — 铁律注释、KeepTogetherZone 接口、adjustCutForKeepTogether()、collectKeepTogetherZones()、findSafeCutRow 参数调整、downloadHtmlAsPdfWithBreaks 和 downloadReportWithCover 中集成</file>
+    <file>src/lib/reportV3Generator.ts — data-keep-together 标记在雷达图/四区图/维度卡片横幅/职涯阶段/结尾块上；body 中无 data-page-break（自然排版）</file>
+  </affected_files>
+
+  <rule id="5" name="终检像素安全微调 + 切行验证">
+    <summary>
+      adjustCutForKeepTogether 可能将切点移到 keep-together 区域边界 (zone.topMm),
+      该位置不一定是行间空白。因此在所有调整完成后，
+      以 ±8% 页高执行最终微调扫描（从旧的±4%扩大），确保切点落在真正的行间空白。
+      同样受 hardMaxPx 约束。
+    </summary>
+  </rule>
+
+  <rule id="6" name="切行验证 + 救援扫描 (Rescue Scan)">
+    <summary>
+      所有调整完成后，用 isCutAtRealGap(rowData, px, 4, 14) 验证：
+      - transitions ≤ 12: 切点行及±4邻居行均安静
+      - avgBrightness > 200: 排除在深色文字主体内切割
+      - minGapWidth ≥ 14: 切点周围连续安静行宽度≥14行(≈7物理像素@2×)
+        防止在抗锯齿过渡区的窄缝切割
+      如果验证失败，启动三轮救援扫描：
+        a) 第一轮：以±30%页高搜索 (确认半径2，无间隙宽度要求)
+        b) 第二轮(lastResort)：以±50%页高从hardMaxPx位置搜索 (确认半径1)
+        c) 第三轮(EMERGENCY)：不验证间隙，直接接受findSafeCutRow的最佳结果，
+           页面填充率下限降至50%minFillMm，绝对避免在文字行上切割。
+    </summary>
+  </rule>
+
+  <rule id="7" name="PrecomputedRowData 预计算机制">
+    <summary>
+      2026-03-16 新增。canvas 渲染完成后立即调用 precomputeCanvasRowData()，
+      一次性扫描全部像素行（分批次2000行），生成 PrecomputedRowData：
+      - transitions: Uint16Array — 每行亮度跳变次数
+      - avgBrightness: Float32Array — 每行平均亮度（保留小数精度）
+      重要: 不能用Uint8Array，因为四舍五入会在阈值218附近产生误判。
+      后续 findSafeCutRow / getRowBusyness / isCutAtRealGap 三个函数
+      仅做 O(1) 数组查找，不再调用 getImageData。
+    </summary>
+  </rule>
+
+  <rule id="8" name="异步图像编码 (encodeCanvasImage)">
+    <summary>
+      2026-03-16 新增。每页切片的JPEG编码从同步toDataURL改为异步encodeCanvasImage()：
+      1) 优先使用canvas.toBlob()，JPEG编码在浏览器原生线程执行，不阻塞主线程
+      2) toBlob输出Uint8Array直接传给jsPDF.addImage，跳过base64编码开销(~33%)
+      3) toBlob失败时自动fallback到toDataURL(JPEG)→toDataURL(PNG)
+      20页报告预期节省: 2-3秒主线程阻塞时间。
+    </summary>
+  </rule>
+
+  <common_mistake>
+    历史教训：
+    1) 以前只靠像素扫描，无法保护中型视觉组件 → 引入 data-keep-together 解决。
+    2) 在每个章节和每张卡片前插入 data-page-break → 导致过度分页、大量空白 → 全部移除，改用自然排版。
+    3) absoluteMaxMm 使用 usableHeight * 1.08 计算，溢出21.5mm可越过footer甚至超出page。
+       改为基于实际footer/header位置的硬上限(hardMaxSliceMm)。
+    4) adjustCutForKeepTogether移动切点后未重新像素验证，可能落在文字行中间。
+       新增终检微调扫描解决。
+    5) findSafeCutRow在某些内容区域返回"假阳性"安静行，新增isCutAtRealGap + 救援扫描解决。
+    7) 不可用Uint8Array存储avgBrightness（四舍五入在阈值附近产生误判），必须用Float32Array。
+    8) isCutAtRealGap验证半径不得小于4（中文抗锯齿过渡可达3-5像素，±2会误通过）。
+    6) findSafeCutRow从MIN_GAP=4直接fallback到单行→容易接受假间隙。
+       中间插入MIN_GAP=2超放松扫描，捕获紧密行间隙。
+    9) 安静行跳变阈值不得小于10。旧值≤4正好在带边框卡片(border:1px solid)的
+       跳变边界上——不同浏览器渲染抗锯齿差异导致4-8次跳变，阈值≤4频繁失败。
+    10) isCutAtRealGap验证阈值>12（而非旧的>6），新增avgBrightness>200亮度检查，
+        新增minGapWidth可选参数防止在过窄间隙切割。
+    11) 三轮救援全部失败时必须有EMERGENCY回退——旧代码放弃后保持文字行上的切点不变。
+    12) 多行文本块不应用 data-keep-together（导致大空白），也不应仅靠像素扫描（不可靠）。
+        正确方案是 Text Line Snap v2：DOM 定向 + 像素精调双重机制。
+    13) Text Line Snap v1 的检测窗口 ±0.5×LH 太窄，无法覆盖段落间 14px(3.26mm) 间距。
+        像素扫描把切点移到间距中央，但距字符反锯齿仅 3-5px，产生 phantom artifact。
+        v2 将检测范围扩大到 ±1.5×LH(8.79mm)，完全覆盖盲区。
+    14) snap 成功后不应跳过像素验证。DOM 行边界和 canvas 实际渲染可能有 2-3px
+        偏差（字体度量、亚像素渲染、取整）。必须用 findSafeCutRow(±1LH) 精调到真实间隙中心。
+    15) Text Line Snap v2 像素精调使用对称±1LH约束，向下漂移0.3-1LH会进入下一行字型区
+        (行高的15%-85%)导致字符被切。改为非对称约束: maxDownDrift=0.3×LH, maxUpDrift=1×LH。
+    核心原则（八层防线，v5 架构）：
+    - 第一道: data-keep-together（视觉组件、图表、Banner、标题等不可分割块）
+    - 第二道: Text Line Snap v3（两轮匹配：Pass1优先最大直接包含块，Pass2取最近中心块）
+    - 第三道: Glyph碰撞守卫-首次（snap后检测字型区碰撞，relaxed minFill）
+    - 第四道: 像素扫描 + 救援（非文本区域的微调验证）
+    - 第五道: Glyph碰撞守卫-重检（捕获像素扫描引入的碰撞，relaxed minFill）
+    - 第六道: 最终keep-together重校（阻止前五层撤销保护）
+    - 第七道: 绝对最终像素验证（两条代码路径各一道，isCutAtRealGap+findSafeCutRow救援）
+    16) task#22扩展text detection后导致snap冲突（header的lineHeight污染）。
+        短元素(headers/labels)不应进入textLineInfos，应用keep-together保护。
+        textLineInfos仅限多行prose文本(.cpc-text-block)和接近font-size的p/div。
+    17) Layer 3(像素扫描)之后必须有glyph guard。否则rescue scan可将切点
+        移入文本行内，而Final Iron Rule仅保护keep-together区域不保护文本。
+    18) Glyph guard的minFillMm使用relaxed值(20% of normal ≈ 21mm)。
+        正常minFill(104mm)会导致在页面较早位置发生碰撞时guard无法修正。
+        宁可产生短页也绝不切断文字。
+    19) maxDownDrift 从0.3×LH收紧到0.1×LH：
+        0.3×LH = ~7.5px 远超glyph zone起点(15%=3.78px)；
+        0.1×LH = ~2.5px 安全地留在gap zone(0-15%)内。
+    20) 短文本块(1-2行.cpc-text-block)被1.8×阈值排除出textLineInfos:
+        单行文本块 rect.height ≈ 1.0×LH < 1.8×阈值 → 未纳入保护列表
+        六层防线中的4层(snap/glyph guard×2/post-scan)全部跳过
+        修复: PRIMARY pass使用0.8×阈值，SECONDARY保持1.8×阈值。
+        关键设计原则: .cpc-text-block是开发者语义标记的文本，
+        不含header，即使单行也可信任其lineHeight正确性。
+    22) snapCutToTextLineBoundary v2单轮遍历首匹配胜出→短块劫持长块参考网格:
+        修复: v3两轮匹配。Pass1找切点直接落在的最大块，Pass2找±1.5LH内最近中心块。
+    23) textLineSnapped=true路径跳过isCutAtRealGap → snap计算错误时无最终安全网:
+        修复: 两条代码路径各增一道绝对最终像素验证(在Final Iron Rule之后、slice之前)。
+    24) .cpc-text-block子元素(p/ul/ol)的默认margin/padding破坏均匀行高:
+        修复: CSS重置所有子元素margin:0;padding:0;line-height:inherit;font-size:inherit。
+    21) ❗禁止对长文本段落使用data-keep-together:
+        锡点卡片内的区域分析/核心诠释/锚点解释/风险提醒/发展路径
+        不可使用data-keep-together，会导致过多空白页。
+        正确做法: 0.8×阈值使其进入textLineInfos，由text snap+glyph guard行级保护。
+        仅对短且含非文本元素的块(胶囊+角色说明/发展张力/图表)使用data-keep-together。
+  </common_mistake>
+
+  <rule id="11" name="非对称精调铁律">
+    <summary>
+      2026-03-17 新增(task#20)，task#23收紧。
+      Text Line Snap v2 的像素精调步骤使用非对称约束：
+      - 向下漂移上限: maxDownDrift = lineHeightMm × 0.1 (约2.5px CSS @14px/1.8LH)
+      - 向上漂移上限: maxUpDrift = lineHeightMm × 1.0 (约25.2px CSS)
+      收紧原因(task#23): 0.3×LH = ~7.5px远超glyph zone起点(15%=3.78px)。
+      0.1×LH = ~2.5px确保在gap zone(0-15%)内。
+      当drift > maxDownDrift时，精调结果被REJECTED，保留snap原始位置。
+    </summary>
+  </rule>
+
+  <rule id="12" name="Layer 4 字型碰撞守卫 (双重检查)">
+    <summary>
+      2026-03-17 新增(task#20)，task#23升级为双重检查+relaxed minFill。
+
+      applyGlyphGuard() 可复用函数，遍历textLineInfos检测切点是否在字型区：
+      1. 计算切点在所在行的相对位置: posInLine = (nextPageTop - blockTopMm) % lineHeightMm
+      2. 字型区: lineHeightMm×0.15 ~ lineHeightMm×0.85
+      3. 碰撞时优先上移到gapAbove(当前行顶部)，次选下移到gapBelow(下一行顶部)
+      4. 使用relaxed minFill = minFillMm × 0.2 (约21mm)，比正常值宽松5倍
+      5. 仅处理第一个匹配的文本块(break后退出)
+
+      双重调用时机（两个分页循环均相同）：
+      a) snap后、pixel scan前 — 捕获text snap+fine-tune引入的碰撞
+      b) pixel scan后、Final Iron Rule前 — 捕获Layer 3/rescue引入的碰撞
+
+      为什么relaxed minFill:
+      正常minFillMm(104mm)导致在页面较早位置发生碰撞时，gapAbove/gapBelow
+      都不满足104mm的最小填充要求。guard检测到碰撞但无法修正 → 文字被切。
+      relaxed值(21mm)允许产生短页来避免切断文字。
+    </summary>
+  </rule>
+
+  <rule id="10" name="Text Line Snap v2 DOM行级定位 + 像素精调">
+    <summary>
+      2026-03-17 新增，同日升级至 v2。
+
+      当页面切点落在或接近多行文本块(.cpc-text-block/.cpc-text-block-light)时，
+      用 DOM 行高将切点对齐到行边界，然后用像素扫描在 ±1 行高内精调。
+
+      v2 要点（task#19 修复）：
+      - 检测范围从 ±0.5×LH 扩大到 ±1.5×LH，覆盖段落间 14px CSS 间距盲区
+      - lineIdx >= 0 允许切在块顶部（v1 禁止 lineIdx=0）
+      - 首个匹配块候选失败后 continue 继续尝试相邻块（v1 break 放弃）
+      - snap 后用 findSafeCutRow(±1LH) 找 canvas 实际间隙中心，不再直接信任 DOM
+      - 返回 lineHeightMm 供 caller 计算像素精调范围
+
+      collectTextLineCutInfo() 配置(task#20原始, task#23回退, task#24分化阈值):
+      - Primary pass: 仅 .cpc-text-block, .cpc-text-block-light
+        (task#22曾加header类, task#23回退 — header由keep-together保护)
+      - PRIMARY高度阈值: 0.8×LH (task#24从1.8×降低 — 这些是语义标记的文本块,
+        即使单行也需保护; 不含header所以无snap冲突风险)
+      - Secondary pass: p, div (font-size 12-16px, line-height ratio≥1.5,
+        非keep-together内部, 无cpc-text-block子元素)
+      - SECONDARY高度阈值: 保持1.8×LH (通用元素需严格过滤)
+      - processElement()接受heightThreshold参数, 按pass类型使用不同阈值
+      - seenElements Set去重
+
+      工作流程：
+      1. collectTextLineCutInfo() 收集文本块位置和 lineHeight（双轮选择器, 分化阈值）
+      2. adjustCutForKeepTogether 之后调用 snapCutToTextLineBoundary()
+      3. 检测范围 ±1.5×LH 内的文本块，snap 到 blockTopMm + n × lineHeightMm
+      4. snap 后在 ±1LH 范围内非对称像素精调 (findSafeCutRow, maxDown=0.1LH)
+      5. snap 失败 → 正常像素扫描流程
+      6. Layer 4 字型碰撞守卫（终检）
+
+      task#24关键发现：
+      - 短文本块(1-2行)因1.8×阈值被排除出textLineInfos
+      - 不在textLineInfos中 → snap/glyph guard/post-scan guard全部跳过
+      - 唯一生效的是pixel scan(不理解文本语义)和keep-together(需显式标记)
+      - 修复: PRIMARY pass使用0.8×阈值, 确保所有.cpc-text-block均进入保护列表
+      - 额外保护: 锚点卡片内5个内容段落添加data-keep-together(双层防护)
+
+      为什么 v1 失败：
+      像素扫描 (12%页高范围) 把切点移到段落间 14px(3.26mm) 间距里，
+      此位置不在上下文本块内部（仅差 ~0.3mm），但 v1 的 ±2.93mm 检测窗
+      刚好覆盖不到。snap 不触发 → 无保护 → 字符反锯齿边缘被切。
+    </summary>
+  </rule>
+
+  <rule id="9" name="边框跳变容差 (Border Transition Tolerance)">
+    <summary>
+      2026-03-16 新增。报告卡片使用 border:1px solid rgba(R,G,B,0.2) 在浅色背景上。
+      该边框在2×画布渲染后左右各产生2-4次亮度跳变，合计4-8次。
+      但不同浏览器/DPI/抗锯齿算法可能使实际跳变数在4-8之间波动。
+      旧阈值≤4恰好在边界上，导致某些环境下卡片内所有行间空白行
+      被误判为繁忙行，findSafeCutRow四轮pass全部失败→切割穿过文字。
+      解决: 安静行阈值提升到≤10，isCutAtRealGap阈值提升到>12，
+      文字行(15-50次跳变)仍被正确排除，边框行安全通过。
+    </summary>
+  </rule>
+</pagination_iron_rules>

@@ -17,6 +17,8 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import NotFound from "@/pages/NotFound";
 import RoleGuard from "@/components/desktop/RoleGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import RouteErrorFallback from "@/components/RouteErrorFallback";
+import ReportDownloadProgress from "@/components/desktop/ReportDownloadProgress";
 
 // Layouts (keep eager - small files, always needed for shell)
 import MainLayout from "@/layouts/MainLayout";
@@ -26,8 +28,7 @@ import MobileLayout from "@/layouts/MobileLayout";
 const DesktopHomePage = lazy(() => import("@/pages/desktop/HomePage"));
 const DesktopAssessmentPage = lazy(() => import("@/pages/desktop/AssessmentPage"));
 const DesktopResultsOverviewPage = lazy(() => import("@/pages/desktop/ResultsOverviewPage"));
-const DesktopDeepDivePage = lazy(() => import("@/pages/desktop/DeepDivePage"));
-const DesktopActionPlanPage = lazy(() => import("@/pages/desktop/ActionPlanPage"));
+const ReportViewPage = lazy(() => import("@/pages/desktop/ReportViewPage"));
 const DesktopHistoryPage = lazy(() => import("@/pages/desktop/HistoryPage"));
 const DesktopAuthPage = lazy(() => import("@/pages/desktop/AuthPage"));
 const AuthCallbackPage = lazy(() => import("@/pages/desktop/AuthCallbackPage"));
@@ -35,13 +36,16 @@ const HowToUsePage = lazy(() => import("@/pages/desktop/HowToUsePage"));
 const HRInterpretationPage = lazy(() => import("@/pages/desktop/HRInterpretationPage"));
 const IdealCardTestPage = lazy(() => import("@/pages/desktop/IdealCardTestPage"));
 const IdealCardResultsPage = lazy(() => import("@/pages/desktop/IdealCardResultsPage"));
-const ComprehensiveReportPage = lazy(() => import("@/pages/desktop/ComprehensiveReportPage"));
+const IdealCardReportViewPage = lazy(() => import("@/pages/desktop/IdealCardReportViewPage"));
+
+const FusionReportV3Page = lazy(() => import("@/pages/desktop/FusionReportV3Page"));
 const DesktopMessagesPage = lazy(() => import("@/pages/desktop/MessagesPage"));
 const ChangePasswordPage = lazy(() => import("@/pages/desktop/ChangePasswordPage"));
 const VerifyCertificatePage = lazy(() => import("@/pages/desktop/VerifyCertificatePage"));
 const CpWalletPage = lazy(() => import("@/pages/desktop/CpWalletPage"));
 const RechargePage = lazy(() => import("@/pages/desktop/RechargePage"));
 const ReferralPage = lazy(() => import("@/pages/desktop/ReferralPage"));
+const ReportDownloadPage = lazy(() => import("@/pages/desktop/ReportDownloadPage"));
 
 const MobileHomePage = lazy(() => import("@/pages/mobile/HomePage"));
 const MobileAssessmentPage = lazy(() => import("@/pages/mobile/AssessmentPage"));
@@ -79,18 +83,17 @@ const SuperAdminCertificationReviewPage = lazy(() => import("@/pages/super-admin
 const SuperAdminBatchCduReviewPage = lazy(() => import("@/pages/super-admin/desktop/BatchCduReviewPage"));
 const SuperAdminGcqaExportPage = lazy(() => import("@/pages/super-admin/desktop/GcqaExportPage"));
 const SuperAdminMembershipRulesPage = lazy(() => import("@/pages/super-admin/desktop/MembershipRulesPage"));
-const SuperAdminPartnerReviewPage = lazy(() => import("@/pages/super-admin/desktop/PartnerReviewPage"));
 const SuperAdminRewardManagementPage = lazy(() => import("@/pages/super-admin/desktop/RewardManagementPage"));
 const SuperAdminReportGeneratorPage = lazy(() => import("@/pages/super-admin/desktop/ReportGeneratorPage"));
 const SuperAdminCpRulesPage = lazy(() => import("@/pages/super-admin/desktop/CpRulesEnginePage"));
 const SuperAdminLifeCardManagementPage = lazy(() => import("@/pages/super-admin/desktop/LifeCardManagementPage"));
 const SuperAdminFusionRulesPage = lazy(() => import("@/pages/super-admin/desktop/FusionRulesPage"));
-
-const PartnerLayout = lazy(() => import("@/layouts/PartnerLayout"));
-const PartnerDashboardPage = lazy(() => import("@/pages/partner/desktop/DashboardPage"));
-const PartnerProductsPage = lazy(() => import("@/pages/partner/desktop/ProductsPage"));
-const PartnerSalesPage = lazy(() => import("@/pages/partner/desktop/SalesPage"));
-const PartnerRevenuePage = lazy(() => import("@/pages/partner/desktop/RevenuePage"));
+const SuperAdminOrgTypesPage = lazy(() => import("@/pages/super-admin/desktop/OrgTypesPage"));
+const SuperAdminAnonymousBatchListPage = lazy(() => import("@/pages/super-admin/desktop/AnonymousBatchListPage"));
+const SuperAdminCreateAnonymousBatchPage = lazy(() => import("@/pages/super-admin/desktop/CreateAnonymousBatchPage"));
+const SuperAdminAnonymousBatchDetailPage = lazy(() => import("@/pages/super-admin/desktop/AnonymousBatchDetailPage"));
+const SuperAdminAnonymousBatchReportPage = lazy(() => import("@/pages/super-admin/desktop/AnonymousBatchReportPage"));
+const SuperAdminAnonymousPermissionsPage = lazy(() => import("@/pages/super-admin/desktop/AnonymousPermissionsPage"));
 
 const OrgAdminLayout = lazy(() => import("@/layouts/OrgAdminLayout"));
 const OrgDashboardPage = lazy(() => import("@/pages/org-admin/desktop/DashboardPage"));
@@ -105,6 +108,7 @@ const OrgAssessmentReportsPage = lazy(() => import("@/pages/org-admin/desktop/As
 const OrgCertificationOverviewPage = lazy(() => import("@/pages/org-admin/desktop/CertificationOverviewPage"));
 const OrgCduMonitoringPage = lazy(() => import("@/pages/org-admin/desktop/CduMonitoringPage"));
 const OrgRenewalApprovalPage = lazy(() => import("@/pages/org-admin/desktop/RenewalApprovalPage"));
+const OrgAnonymousAssessmentPage = lazy(() => import("@/pages/org-admin/desktop/AnonymousAssessmentPage"));
 
 const ConsultantLayout = lazy(() => import("@/layouts/ConsultantLayout"));
 const ConsultantDashboardPage = lazy(() => import("@/pages/consultant/desktop/DashboardPage"));
@@ -118,6 +122,25 @@ const ConsultantMyCertificationPage = lazy(() => import("@/pages/consultant/desk
 const ConsultantMyCduRecordsPage = lazy(() => import("@/pages/consultant/desktop/MyCduRecordsPage"));
 const ConsultantRenewalStatusPage = lazy(() => import("@/pages/consultant/desktop/RenewalStatusPage"));
 const ConsultantCertificationApplicationPage = lazy(() => import("@/pages/consultant/desktop/CertificationApplicationPage"));
+
+// Anonymous participant page (public, no auth required)
+const AnonymousParticipantPage = lazy(() => import("@/pages/AnonymousParticipantPage"));
+
+// Batch assessment participant page (public, no auth required)
+const BatchAssessmentParticipantPage = lazy(() => import("@/pages/BatchAssessmentParticipantPage"));
+
+// Shared report page (public, no auth required)
+const SharedReportPage = lazy(() => import("@/pages/desktop/SharedReportPage"));
+
+// Super Admin batch assessment pages
+const SuperAdminBatchAssessmentListPage = lazy(() => import("@/pages/super-admin/desktop/BatchAssessmentListPage"));
+const SuperAdminCreateBatchAssessmentPage = lazy(() => import("@/pages/super-admin/desktop/CreateBatchAssessmentPage"));
+const SuperAdminBatchAssessmentDetailPage = lazy(() => import("@/pages/super-admin/desktop/BatchAssessmentDetailPage"));
+
+// Org Admin batch assessment pages
+const OrgBatchAssessmentListPage = lazy(() => import("@/pages/org-admin/desktop/BatchAssessmentListPage"));
+const OrgCreateBatchAssessmentPage = lazy(() => import("@/pages/org-admin/desktop/CreateBatchAssessmentPage"));
+const OrgBatchAssessmentDetailPage = lazy(() => import("@/pages/org-admin/desktop/BatchAssessmentDetailPage"));
 
 // ─── Helpers ───────────────────────────────────────
 
@@ -170,20 +193,21 @@ function ResponsiveLayout() {
 
 const router = createBrowserRouter(
   createRoutesFromElements(
-    <Route element={<RootLayout />}>
+    <Route element={<RootLayout />} errorElement={<RouteErrorFallback />}>
       {/* User Routes */}
-      <Route element={<ResponsiveLayout />}>
+      <Route element={<ResponsiveLayout />} errorElement={<RouteErrorFallback />}>
         <Route path="/" element={<ResponsivePage desktop={DesktopHomePage} mobile={MobileHomePage} />} />
         <Route path="/assessment" element={<ResponsivePage desktop={DesktopAssessmentPage} mobile={MobileAssessmentPage} />} />
         <Route path="/results" element={<ResponsivePage desktop={DesktopResultsOverviewPage} mobile={MobileResultsPage} />} />
-        <Route path="/deep-dive" element={<ResponsivePage desktop={DesktopDeepDivePage} mobile={DesktopDeepDivePage} />} />
-        <Route path="/action-plan" element={<ResponsivePage desktop={DesktopActionPlanPage} mobile={DesktopActionPlanPage} />} />
+        <Route path="/report-view" element={<ResponsivePage desktop={ReportViewPage} mobile={ReportViewPage} />} />
         <Route path="/history" element={<ResponsivePage desktop={DesktopHistoryPage} mobile={DesktopHistoryPage} />} />
         <Route path="/how-to-use" element={<ResponsivePage desktop={HowToUsePage} mobile={HowToUsePage} />} />
         <Route path="/hr-guide" element={<ResponsivePage desktop={HRInterpretationPage} mobile={HRInterpretationPage} />} />
         <Route path="/ideal-card-test" element={<ResponsivePage desktop={IdealCardTestPage} mobile={IdealCardTestPage} />} />
         <Route path="/ideal-card-results" element={<ResponsivePage desktop={IdealCardResultsPage} mobile={IdealCardResultsPage} />} />
-        <Route path="/comprehensive-report" element={<ResponsivePage desktop={ComprehensiveReportPage} mobile={ComprehensiveReportPage} />} />
+        <Route path="/ideal-card-report-view" element={<ResponsivePage desktop={IdealCardReportViewPage} mobile={IdealCardReportViewPage} />} />
+
+            <Route path="/fusion-report" element={<ResponsivePage desktop={FusionReportV3Page} mobile={FusionReportV3Page} />} />
         <Route path="/my-reports" element={<Navigate to="/history" replace />} />
         <Route path="/messages" element={<ResponsivePage desktop={DesktopMessagesPage} mobile={DesktopMessagesPage} />} />
         <Route path="/profile" element={<Lazy Component={MobileProfilePage} />} />
@@ -191,6 +215,8 @@ const router = createBrowserRouter(
         <Route path="/cp-wallet" element={<Lazy Component={CpWalletPage} />} />
         <Route path="/recharge" element={<Lazy Component={RechargePage} />} />
         <Route path="/referral" element={<Lazy Component={ReferralPage} />} />
+        <Route path="/report/download" element={<ResponsivePage desktop={ReportDownloadPage} mobile={ReportDownloadPage} />} />
+        <Route path="/report/download/:id" element={<ResponsivePage desktop={ReportDownloadPage} mobile={ReportDownloadPage} />} />
       </Route>
 
       {/* Legacy Admin */}
@@ -235,11 +261,19 @@ const router = createBrowserRouter(
         <Route path="batch-cdu-review" element={<Lazy Component={SuperAdminBatchCduReviewPage} />} />
         <Route path="gcqa-export" element={<Lazy Component={SuperAdminGcqaExportPage} />} />
         <Route path="membership-rules" element={<Lazy Component={SuperAdminMembershipRulesPage} />} />
-        <Route path="partner-review" element={<Lazy Component={SuperAdminPartnerReviewPage} />} />
         <Route path="reward-management" element={<Lazy Component={SuperAdminRewardManagementPage} />} />
         <Route path="cp-rules" element={<Lazy Component={SuperAdminCpRulesPage} />} />
         <Route path="life-cards" element={<Lazy Component={SuperAdminLifeCardManagementPage} />} />
         <Route path="fusion-rules" element={<Lazy Component={SuperAdminFusionRulesPage} />} />
+        <Route path="org-types" element={<Lazy Component={SuperAdminOrgTypesPage} />} />
+        <Route path="anonymous-assessment" element={<Lazy Component={SuperAdminAnonymousBatchListPage} />} />
+        <Route path="anonymous-assessment/create" element={<Lazy Component={SuperAdminCreateAnonymousBatchPage} />} />
+        <Route path="anonymous-assessment/:batchId" element={<Lazy Component={SuperAdminAnonymousBatchDetailPage} />} />
+        <Route path="anonymous-assessment/:batchId/report" element={<Lazy Component={SuperAdminAnonymousBatchReportPage} />} />
+        <Route path="anonymous-assessment/permissions" element={<Lazy Component={SuperAdminAnonymousPermissionsPage} />} />
+        <Route path="batch-assessment" element={<Lazy Component={SuperAdminBatchAssessmentListPage} />} />
+        <Route path="batch-assessment/create" element={<Lazy Component={SuperAdminCreateBatchAssessmentPage} />} />
+        <Route path="batch-assessment/:batchId" element={<Lazy Component={SuperAdminBatchAssessmentDetailPage} />} />
         <Route path="settings" element={<Lazy Component={AdminSettingsPage} />} />
         <Route path="change-password" element={<Lazy Component={ChangePasswordPage} />} />
       </Route>
@@ -265,6 +299,10 @@ const router = createBrowserRouter(
         <Route path="certification-overview" element={<Lazy Component={OrgCertificationOverviewPage} />} />
         <Route path="cdu-monitoring" element={<Lazy Component={OrgCduMonitoringPage} />} />
         <Route path="renewal-approval" element={<Lazy Component={OrgRenewalApprovalPage} />} />
+        <Route path="anonymous-assessment" element={<Lazy Component={OrgAnonymousAssessmentPage} />} />
+        <Route path="batch-assessment" element={<Lazy Component={OrgBatchAssessmentListPage} />} />
+        <Route path="batch-assessment/create" element={<Lazy Component={OrgCreateBatchAssessmentPage} />} />
+        <Route path="batch-assessment/:batchId" element={<Lazy Component={OrgBatchAssessmentDetailPage} />} />
         <Route path="settings" element={<Lazy Component={AdminSettingsPage} />} />
         <Route path="change-password" element={<Lazy Component={ChangePasswordPage} />} />
       </Route>
@@ -273,7 +311,7 @@ const router = createBrowserRouter(
       <Route
         path="/consultant"
         element={
-          <RoleGuard allowedRoles={["consultant"]}>
+          <RoleGuard allowedRoles={["consultant", "collaborator"]}>
             <Lazy Component={ConsultantLayout} />
           </RoleGuard>
         }
@@ -292,22 +330,10 @@ const router = createBrowserRouter(
         <Route path="change-password" element={<Lazy Component={ChangePasswordPage} />} />
       </Route>
 
-      {/* Partner Console */}
-      <Route
-        path="/partner"
-        element={
-          <RoleGuard allowedRoles={["partner"]}>
-            <Lazy Component={PartnerLayout} />
-          </RoleGuard>
-        }
-      >
-        <Route index element={<Lazy Component={PartnerDashboardPage} />} />
-        <Route path="products" element={<Lazy Component={PartnerProductsPage} />} />
-        <Route path="sales" element={<Lazy Component={PartnerSalesPage} />} />
-        <Route path="revenue" element={<Lazy Component={PartnerRevenuePage} />} />
-      </Route>
-
       {/* Public Routes */}
+      <Route path="/a/:token" element={<Lazy Component={AnonymousParticipantPage} />} />
+      <Route path="/batch/:slug" element={<Lazy Component={BatchAssessmentParticipantPage} />} />
+      <Route path="/shared-report/:token" element={<Lazy Component={SharedReportPage} />} />
       <Route path="/verify-certificate" element={<Lazy Component={VerifyCertificatePage} />} />
 
       {/* Auth Routes */}
@@ -325,6 +351,7 @@ const App = () => (
         <AuthProvider>
           <TooltipProvider>
             <Sonner />
+            <ReportDownloadProgress />
             <RouterProvider router={router} />
           </TooltipProvider>
         </AuthProvider>

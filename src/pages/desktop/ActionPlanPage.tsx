@@ -11,14 +11,17 @@ import {
 import { DIMENSIONS, type AssessmentResult } from "@/hooks/useAssessment";
 import { useTranslation } from "@/hooks/useLanguage";
 import { getActionPlan, type ActionPlanData } from "@/data/actionPlans";
-import { cn } from "@/lib/utils";
-import { downloadComprehensiveReportFromDisplay } from "@/lib/exportReport";
-import { useTestAuth, getWorkExperienceDescription, type LanguageKey } from "@/hooks/useTestAuth";
+import { cn, resolveUserDisplayName } from "@/lib/utils";
+import { downloadLatestV3Report } from "@/lib/reportV3Download";
+import { useTestAuth } from "@/hooks/useTestAuth";
+import { useAuth } from "@/hooks/useAuth";
+import type { LangKey } from "@/lib/reportDataFetcher";
 import { toast } from "sonner";
 
 export default function ActionPlanPage() {
   const { language } = useTranslation();
   const { workYears, isExecutive, isEntrepreneur } = useTestAuth();
+  const { user, profile } = useAuth();
   const [results, setResults] = useState<AssessmentResult | null>(null);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -32,30 +35,14 @@ export default function ActionPlanPage() {
     if (stored) {
       setResults(JSON.parse(stored));
     } else {
-      // Demo data
-      setResults({
-        scores: {
-          TF: 82,
-          GM: 45,
-          AU: 75,
-          SE: 35,
-          EC: 68,
-          SV: 55,
-          CH: 70,
-          LS: 48,
-        },
-        mainAnchor: "TF",
-        highSensitivityAnchors: ["TF"],
-        conflictAnchors: ["AU", "SE"],
-        riskIndex: 42,
-        stability: "mature",
-      });
+      navigate("/");
     }
   }, []);
 
   // Determine career stage code for comprehensive report
   const getCareerStageCode = (): string | null => {
-    if (isExecutive || isEntrepreneur) return "executive";
+    if (isExecutive) return "executive";
+    if (isEntrepreneur) return "entrepreneur";
     if (workYears !== null) {
       if (workYears <= 5) return "entry";
       if (workYears <= 10) return "mid";
@@ -65,26 +52,21 @@ export default function ActionPlanPage() {
   };
 
   const handleExportReport = async () => {
-    if (!results) return;
+    if (!user) return;
     setIsExporting(true);
     
     try {
-      const highSensAnchors = results.highSensitivityAnchors?.length
-        ? results.highSensitivityAnchors
-        : Object.entries(results.scores).filter(([, s]) => s > 80).sort(([, a], [, b]) => b - a).map(([d]) => d);
-      await downloadComprehensiveReportFromDisplay({
-        mainAnchor: highSensAnchors[0] || results.mainAnchor || "TF",
-        highSensitivityAnchors: highSensAnchors,
-        scores: results.scores,
-        stability: results.stability,
-        riskIndex: results.riskIndex ?? 0,
-        conflictAnchors: Array.isArray(results.conflictAnchors) 
-          ? results.conflictAnchors.flat() 
-          : [],
-        createdAt: new Date().toLocaleString(language === "en" ? "en-US" : language === "zh-TW" ? "zh-TW" : "zh-CN"),
-        userName: getWorkExperienceDescription(workYears, isExecutive, isEntrepreneur, language as LanguageKey),
-        careerStage: getCareerStageCode(),
-      }, language);
+      const reportOutput = await downloadLatestV3Report(
+        user.id,
+        resolveUserDisplayName(profile, user, language),
+        getCareerStageCode() || "mid",
+        workYears,
+        language as LangKey,
+      );
+      if (!reportOutput) {
+        toast.error(language === "en" ? "No assessment data found" : language === "zh-TW" ? "未找到測評數據" : "未找到测评数据");
+        return;
+      }
       toast.success(language === "en" ? "Report exported successfully" : language === "zh-TW" ? "報告匯出成功" : "报告导出成功");
     } catch (error) {
       console.error("Export failed:", error);
@@ -96,10 +78,10 @@ export default function ActionPlanPage() {
 
   if (!results) return null;
 
-  const highSensAnchors = results.highSensitivityAnchors?.length
-    ? results.highSensitivityAnchors
-    : Object.entries(results.scores).filter(([, s]) => s > 80).sort(([, a], [, b]) => b - a).map(([d]) => d);
-  const displayAnchor = highSensAnchors[0] || results.mainAnchor || "TF";
+  const coreAdvAnchors = results.coreAdvantageAnchors?.length
+    ? results.coreAdvantageAnchors
+    : Object.entries(results.scores).filter(([, s]) => s >= 80).sort(([, a], [, b]) => b - a).map(([d]) => d);
+  const displayAnchor = coreAdvAnchors[0] || results.mainAnchor || "TF";
   const mainAnchorName = getDimensionName(displayAnchor);
   const actionPlan = getActionPlan(displayAnchor, language);
   const isEn = language === "en";
@@ -117,10 +99,10 @@ export default function ActionPlanPage() {
           </h1>
           <p className="text-muted-foreground">
             {isEn 
-              ? `Based on your ${highSensAnchors.length > 0 ? 'high-sensitivity anchor' : 'top anchor'} [${mainAnchorName}], here are specific, actionable next steps. Not comfort, but direction.`
+              ? `Based on your ${coreAdvAnchors.length > 0 ? 'core advantage anchor' : 'top anchor'} [${mainAnchorName}], here are specific, actionable next steps. Not comfort, but direction.`
               : language === "zh-TW"
-                ? `基於你的${highSensAnchors.length > 0 ? '高敏感錨' : '最高分錨點'}【${mainAnchorName}】，以下是具體的、可執行的下一步建議。不是安慰，而是方向。`
-              : `基于你的${highSensAnchors.length > 0 ? '高敏感锚' : '最高分锚点'}【${mainAnchorName}】，以下是具体的、可执行的下一步建议。不是安慰，而是方向。`}
+                ? `基於你的${coreAdvAnchors.length > 0 ? '核心優勢錨點' : '最高分錨點'}【${mainAnchorName}】，以下是具體的、可執行的下一步建議。不是安慰，而是方向。`
+              : `基于你的${coreAdvAnchors.length > 0 ? '核心优势锚点' : '最高分锚点'}【${mainAnchorName}】，以下是具体的、可执行的下一步建议。不是安慰，而是方向。`}
           </p>
         </div>
       </section>
@@ -302,8 +284,8 @@ export default function ActionPlanPage() {
                 {isEn 
                   ? "Choosing a career path aligned with your anchor means you may need to give up:"
                   : language === "zh-TW"
-                    ? "選擇符合高敏感錨的職業路徑，意味著你可能需要放棄："
-                    : "选择符合高敏感锚的职业路径，意味着你可能需要放弃："}
+                    ? "選擇符合核心優勢錨點的職業路徑，意味著你可能需要放棄："
+                    : "选择符合核心优势锚点的职业路径，意味着你可能需要放弃："}
               </p>
               <ul className="list-disc pl-6 space-y-1">
                 {actionPlan.tradeoffs.map((tradeoff, index) => (

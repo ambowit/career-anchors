@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
-  ArrowLeft, Rocket, Lock, FileText, Combine, Triangle, BarChart3,
+  ArrowLeft, Rocket, Lock, LockOpen, FileText, Combine, Triangle, BarChart3,
   Plus, Pencil, Trash2, AlertTriangle, CheckCircle2, Info,
   Users,
 } from "lucide-react";
@@ -56,14 +56,17 @@ const TXT = {
     triAnchors: "Tri-Anchor",
     publish: "Publish",
     lockVersion: "Lock Version",
+    unlockVersion: "Unlock",
     publishConfirm: "Publishing will activate this version for its category. Any currently active version in the same category will be locked. Continue?",
-    lockConfirm: "Locking prevents all future edits. Continue?",
+    lockConfirm: "Locking prevents all future edits. Only super admin can unlock. Continue?",
+    unlockConfirm: "Unlocking will allow editing again and set status to Active. Continue?",
     publishSuccess: "Version published — now active for this category",
     lockSuccess: "Version locked",
+    unlockSuccess: "Version unlocked — now editable",
     draft: "Draft", active: "Active", locked: "Locked",
     draftInfo: "Draft — add content for each career stage before publishing.",
-    activeInfo: "Active — this generator is used for new report generation in this category.",
-    lockedInfo: "Locked — no modifications allowed. Create a new version to make changes.",
+    activeInfo: "Active — this generator is used for new report generation. Content is editable.",
+    lockedInfo: "Locked — no modifications allowed. Super admin can unlock to resume editing.",
     anchorType: "Anchor Type", sectionType: "Section Type", language: "Language",
     scoreRange: "Score Range", textContent: "Text Content (Original Attachment)",
     sourceAttachment: "Source Attachment", save: "Save", cancel: "Cancel",
@@ -91,14 +94,17 @@ const TXT = {
     triAnchors: "三錨結構",
     publish: "發布",
     lockVersion: "鎖定版本",
+    unlockVersion: "解鎖",
     publishConfirm: "發布後此版本將成為該類別的啟用版本，同類別中原有的啟用版本將被自動鎖定。確定繼續？",
-    lockConfirm: "鎖定後無法再修改。確定繼續？",
+    lockConfirm: "鎖定後無法再修改，僅超級管理員可解鎖。確定繼續？",
+    unlockConfirm: "解鎖後將可以繼續編輯，狀態改為啟用中。確定繼續？",
     publishSuccess: "版本已發布 — 已成為該類別的啟用生成器",
     lockSuccess: "版本已鎖定",
+    unlockSuccess: "版本已解鎖 — 可繼續編輯",
     draft: "草稿", active: "啟用中", locked: "已鎖定",
     draftInfo: "草稿狀態 — 請為每個職業階段添加內容後再發布。",
-    activeInfo: "啟用中 — 此生成器將用於該類別新報告的自動生成。",
-    lockedInfo: "已鎖定 — 不允許修改。如需修改請創建新版本。",
+    activeInfo: "啟用中 — 此生成器將用於新報告的自動生成，內容可繼續編輯。",
+    lockedInfo: "已鎖定 — 不允許修改。超級管理員可解鎖以恢復編輯。",
     anchorType: "錨點類型", sectionType: "內容類型", language: "語言",
     scoreRange: "分數區間", textContent: "文本內容（附件原文）",
     sourceAttachment: "來源附件", save: "保存", cancel: "取消",
@@ -107,7 +113,7 @@ const TXT = {
     saveSuccess: "已保存", deleteSuccess: "已刪除",
     deleteConfirm: "確定刪除此項？",
     emptySlot: "尚無文本塊 — 點擊新增",
-    anchor1: "高敏感錨", anchor2: "次高分錨", anchor3: "第三錨點",
+    anchor1: "核心錨", anchor2: "次高分錨", anchor3: "第三錨點",
     combinationCode: "組合代碼", tier: "分級",
     addCombination: "新增組合", addTriAnchor: "新增三錨",
     triCode: "三錨代碼", archetypeName: "模型名稱",
@@ -126,14 +132,17 @@ const TXT = {
     triAnchors: "三锚结构",
     publish: "发布",
     lockVersion: "锁定版本",
+    unlockVersion: "解锁",
     publishConfirm: "发布后此版本将成为该类别的启用版本，同类别中原有的启用版本将被自动锁定。确定继续？",
-    lockConfirm: "锁定后无法再修改。确定继续？",
+    lockConfirm: "锁定后无法再修改，仅超级管理员可解锁。确定继续？",
+    unlockConfirm: "解锁后将可以继续编辑，状态改为启用中。确定继续？",
     publishSuccess: "版本已发布 — 已成为该类别的启用生成器",
     lockSuccess: "版本已锁定",
+    unlockSuccess: "版本已解锁 — 可继续编辑",
     draft: "草稿", active: "启用中", locked: "已锁定",
     draftInfo: "草稿状态 — 请为每个职业阶段添加内容后再发布。",
-    activeInfo: "启用中 — 此生成器将用于该类别新报告的自动生成。",
-    lockedInfo: "已锁定 — 不允许修改。如需修改请创建新版本。",
+    activeInfo: "启用中 — 此生成器将用于新报告的自动生成，内容可继续编辑。",
+    lockedInfo: "已锁定 — 不允许修改。超级管理员可解锁以恢复编辑。",
     anchorType: "锚点类型", sectionType: "内容类型", language: "语言",
     scoreRange: "分数区间", textContent: "文本内容（附件原文）",
     sourceAttachment: "来源附件", save: "保存", cancel: "取消",
@@ -142,7 +151,7 @@ const TXT = {
     saveSuccess: "已保存", deleteSuccess: "已删除",
     deleteConfirm: "确定删除此项？",
     emptySlot: "暂无文本块 — 点击新增",
-    anchor1: "高敏感锚", anchor2: "次高分锚", anchor3: "第三锚点",
+    anchor1: "核心锚", anchor2: "次高分锚", anchor3: "第三锚点",
     combinationCode: "组合代码", tier: "分级",
     addCombination: "新增组合", addTriAnchor: "新增三锚",
     triCode: "三锚代码", archetypeName: "模型名称",
@@ -166,6 +175,7 @@ const STAGE_ICONS: Record<string, string> = {
   mid: "bg-amber-50 text-amber-600 border-amber-200",
   senior: "bg-emerald-50 text-emerald-600 border-emerald-200",
   executive: "bg-purple-50 text-purple-600 border-purple-200",
+  entrepreneur: "bg-rose-50 text-rose-600 border-rose-200",
 };
 
 interface ReportVersionDetailProps {
@@ -218,71 +228,107 @@ export default function ReportVersionDetail({ versionId, onBack }: ReportVersion
     queryFn: async () => {
       const { data, error } = await (supabase as any).from("anchor_score_ranges").select("*").eq("version_id", versionId).order("sort_order");
       if (error) throw error;
-      return data || [];
+      const rows = data || [];
+      // Auto-fix legacy label text in DB (one-time self-healing)
+      const correctLabelTw = "高敏感度；可以持續發展";
+      const correctLabelCn = "高敏感度；可以持续发展";
+      for (const row of rows) {
+        if (row.score_min === 65 && row.score_max === 79) {
+          const needsFix =
+            row.range_label_zh_tw !== correctLabelTw ||
+            row.range_label_zh_cn !== correctLabelCn ||
+            row.range_description_zh_tw !== correctLabelTw ||
+            row.range_description_zh_cn !== correctLabelCn;
+          if (needsFix) {
+            const fixPayload = {
+              range_label_en: "High sensitivity; sustainable development",
+              range_label_zh_tw: "高敏感度；可以持續發展",
+              range_label_zh_cn: "高敏感度；可以持续发展",
+              range_description_en: "High sensitivity; sustainable development",
+              range_description_zh_tw: "高敏感度；可以持續發展",
+              range_description_zh_cn: "高敏感度；可以持续发展",
+            };
+            await (supabase as any).from("anchor_score_ranges").update(fixPayload).eq("id", row.id);
+            Object.assign(row, fixPayload);
+          }
+        }
+      }
+      return rows;
     },
   });
 
-  const { data: allTextBlocks = [] } = useQuery({
-    queryKey: ["anchor-text-blocks", versionId],
+  // Text blocks — server-side filtered to avoid 1000-row PostgREST limit
+  const { data: filteredBlocks = [] } = useQuery({
+    queryKey: ["anchor-text-blocks", versionId, filterAnchor, filterSection, filterLang, filterStage],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("anchor_text_blocks").select("*").eq("version_id", versionId);
+      const { data, error } = await (supabase as any)
+        .from("anchor_text_blocks")
+        .select("*")
+        .eq("version_id", versionId)
+        .eq("anchor_type", filterAnchor)
+        .eq("section_type", filterSection)
+        .eq("language", filterLang)
+        .eq("career_stage", filterStage)
+        .order("score_min");
       if (error) throw error;
       return data || [];
     },
   });
 
-  const { data: combinations = [] } = useQuery({
-    queryKey: ["anchor-combinations", versionId],
+  // Combinations — filtered by career stage server-side
+  const { data: filteredCombinations = [] } = useQuery({
+    queryKey: ["anchor-combinations", versionId, filterStage],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("anchor_combination_mapping").select("*").eq("version_id", versionId).order("created_at");
+      const { data, error } = await (supabase as any)
+        .from("anchor_combination_mapping")
+        .select("*")
+        .eq("version_id", versionId)
+        .eq("career_stage", filterStage)
+        .order("created_at");
       if (error) throw error;
       return data || [];
     },
   });
 
-  const { data: triAnchors = [] } = useQuery({
-    queryKey: ["anchor-tri-mappings", versionId],
+  // Tri-anchors — filtered by career stage server-side
+  const { data: filteredTriAnchors = [] } = useQuery({
+    queryKey: ["anchor-tri-mappings", versionId, filterStage],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("anchor_tri_mapping").select("*").eq("version_id", versionId).order("created_at");
+      const { data, error } = await (supabase as any)
+        .from("anchor_tri_mapping")
+        .select("*")
+        .eq("version_id", versionId)
+        .eq("career_stage", filterStage)
+        .order("created_at");
       if (error) throw error;
       return data || [];
     },
   });
 
-  const isLocked = version?.status === "locked" || version?.status === "active";
+  // Per-stage content counts (lightweight HEAD/count queries)
+  const { data: stageStats = {} as Record<string, { blocks: number; combos: number; tris: number }> } = useQuery({
+    queryKey: ["stage-stats", versionId],
+    queryFn: async () => {
+      const stats: Record<string, { blocks: number; combos: number; tris: number }> = {};
+      await Promise.all(
+        CAREER_STAGES.map(async (stage) => {
+          const [blockResult, comboResult, triResult] = await Promise.all([
+            (supabase as any).from("anchor_text_blocks").select("id", { count: "exact", head: true }).eq("version_id", versionId).eq("career_stage", stage.code),
+            (supabase as any).from("anchor_combination_mapping").select("id", { count: "exact", head: true }).eq("version_id", versionId).eq("career_stage", stage.code),
+            (supabase as any).from("anchor_tri_mapping").select("id", { count: "exact", head: true }).eq("version_id", versionId).eq("career_stage", stage.code),
+          ]);
+          stats[stage.code] = {
+            blocks: blockResult.count || 0,
+            combos: comboResult.count || 0,
+            tris: triResult.count || 0,
+          };
+        })
+      );
+      return stats;
+    },
+  });
 
-  // Filtered text blocks — by anchor + section + language + career stage
-  const filteredBlocks = useMemo(() => {
-    return allTextBlocks.filter((block: any) =>
-      block.anchor_type === filterAnchor &&
-      block.section_type === filterSection &&
-      block.language === filterLang &&
-      block.career_stage === filterStage
-    );
-  }, [allTextBlocks, filterAnchor, filterSection, filterLang, filterStage]);
-
-  // Filtered combinations by career stage
-  const filteredCombinations = useMemo(() => {
-    return combinations.filter((combo: any) => combo.career_stage === filterStage);
-  }, [combinations, filterStage]);
-
-  // Filtered tri-anchors by career stage
-  const filteredTriAnchors = useMemo(() => {
-    return triAnchors.filter((tri: any) => tri.career_stage === filterStage);
-  }, [triAnchors, filterStage]);
-
-  // Per-stage content stats
-  const stageStats = useMemo(() => {
-    const stats: Record<string, { blocks: number; combos: number; tris: number }> = {};
-    CAREER_STAGES.forEach((stage) => {
-      stats[stage.code] = {
-        blocks: allTextBlocks.filter((block: any) => block.career_stage === stage.code).length,
-        combos: combinations.filter((combo: any) => combo.career_stage === stage.code).length,
-        tris: triAnchors.filter((tri: any) => tri.career_stage === stage.code).length,
-      };
-    });
-    return stats;
-  }, [allTextBlocks, combinations, triAnchors]);
+  const isLocked = version?.status === "locked";
 
   // ─── Mutations ───────────────────────────────────────────
   const invalidateAll = () => {
@@ -290,6 +336,7 @@ export default function ReportVersionDetail({ versionId, onBack }: ReportVersion
     queryClient.invalidateQueries({ queryKey: ["anchor-text-blocks", versionId] });
     queryClient.invalidateQueries({ queryKey: ["anchor-combinations", versionId] });
     queryClient.invalidateQueries({ queryKey: ["anchor-tri-mappings", versionId] });
+    queryClient.invalidateQueries({ queryKey: ["stage-stats", versionId] });
     queryClient.invalidateQueries({ queryKey: ["report-version-stats"] });
   };
 
@@ -304,10 +351,7 @@ export default function ReportVersionDetail({ versionId, onBack }: ReportVersion
       await (supabase as any).from("report_versions")
         .update({ status: "active", published_at: new Date().toISOString() })
         .eq("id", versionId);
-      // Lock all content
-      await (supabase as any).from("anchor_text_blocks").update({ is_locked: true }).eq("version_id", versionId);
-      await (supabase as any).from("anchor_combination_mapping").update({ is_locked: true }).eq("version_id", versionId);
-      await (supabase as any).from("anchor_tri_mapping").update({ is_locked: true }).eq("version_id", versionId);
+      // Content remains editable when active — only locked status prevents editing
     },
     onSuccess: () => { invalidateAll(); toast.success(txt.publishSuccess); },
   });
@@ -317,8 +361,25 @@ export default function ReportVersionDetail({ versionId, onBack }: ReportVersion
       await (supabase as any).from("report_versions")
         .update({ status: "locked", locked_at: new Date().toISOString() })
         .eq("id", versionId);
+      // Lock all content entries
+      await (supabase as any).from("anchor_text_blocks").update({ is_locked: true }).eq("version_id", versionId);
+      await (supabase as any).from("anchor_combination_mapping").update({ is_locked: true }).eq("version_id", versionId);
+      await (supabase as any).from("anchor_tri_mapping").update({ is_locked: true }).eq("version_id", versionId);
     },
     onSuccess: () => { invalidateAll(); toast.success(txt.lockSuccess); },
+  });
+
+  const unlockMutation = useMutation({
+    mutationFn: async () => {
+      await (supabase as any).from("report_versions")
+        .update({ status: "active", locked_at: null })
+        .eq("id", versionId);
+      // Unlock all content entries
+      await (supabase as any).from("anchor_text_blocks").update({ is_locked: false }).eq("version_id", versionId);
+      await (supabase as any).from("anchor_combination_mapping").update({ is_locked: false }).eq("version_id", versionId);
+      await (supabase as any).from("anchor_tri_mapping").update({ is_locked: false }).eq("version_id", versionId);
+    },
+    onSuccess: () => { invalidateAll(); toast.success(txt.unlockSuccess); },
   });
 
   const saveBlockMutation = useMutation({
@@ -521,6 +582,15 @@ export default function ReportVersionDetail({ versionId, onBack }: ReportVersion
               <Lock className="w-4 h-4 mr-2" />{txt.lockVersion}
             </Button>
           )}
+          {version.status === "locked" && (
+            <Button
+              variant="outline"
+              className="border-amber-300 text-amber-700 hover:bg-amber-50"
+              onClick={() => setConfirmDialog({ open: true, action: txt.unlockConfirm, onConfirm: () => unlockMutation.mutate() })}
+            >
+              <LockOpen className="w-4 h-4 mr-2" />{txt.unlockVersion}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -549,15 +619,15 @@ export default function ReportVersionDetail({ versionId, onBack }: ReportVersion
         <TabsContent value="overview" className="mt-4">
           <div className="grid grid-cols-3 gap-4">
             <Card className="p-5 text-center">
-              <div className="text-3xl font-bold text-indigo-600">{allTextBlocks.length}</div>
+              <div className="text-3xl font-bold text-indigo-600">{Object.values(stageStats).reduce((sum, s) => sum + (s?.blocks || 0), 0)}</div>
               <div className="text-sm text-slate-500 mt-1">{txt.blocks}</div>
             </Card>
             <Card className="p-5 text-center">
-              <div className="text-3xl font-bold text-sky-600">{combinations.length}</div>
+              <div className="text-3xl font-bold text-sky-600">{Object.values(stageStats).reduce((sum, s) => sum + (s?.combos || 0), 0)}</div>
               <div className="text-sm text-slate-500 mt-1">{txt.combos}</div>
             </Card>
             <Card className="p-5 text-center">
-              <div className="text-3xl font-bold text-violet-600">{triAnchors.length}</div>
+              <div className="text-3xl font-bold text-violet-600">{Object.values(stageStats).reduce((sum, s) => sum + (s?.tris || 0), 0)}</div>
               <div className="text-sm text-slate-500 mt-1">{txt.tris}</div>
             </Card>
           </div>
@@ -839,11 +909,11 @@ export default function ReportVersionDetail({ versionId, onBack }: ReportVersion
 
       {/* ─── Text Block Dialog ──────────────────────────── */}
       <Dialog open={blockDialog.open} onOpenChange={(open) => { if (!open) setBlockDialog({ open: false, editing: null, scoreMin: 0, scoreMax: 0 }); }}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>{blockDialog.editing ? txt.editTextBlock : txt.addTextBlock}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 overflow-y-auto flex-1 min-h-0">
             <div className="flex gap-2 flex-wrap text-xs text-slate-500">
               <Badge variant="outline" className={cn("text-[10px]", STAGE_ICONS[filterStage])}>
                 {getCareerStageLabel(filterStage, language)}
@@ -876,7 +946,7 @@ export default function ReportVersionDetail({ versionId, onBack }: ReportVersion
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button variant="outline" onClick={() => setBlockDialog({ open: false, editing: null, scoreMin: 0, scoreMax: 0 })}>
               {txt.cancel}
             </Button>
@@ -893,11 +963,11 @@ export default function ReportVersionDetail({ versionId, onBack }: ReportVersion
 
       {/* ─── Combination Dialog ─────────────────────────── */}
       <Dialog open={comboDialog} onOpenChange={setComboDialog}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>{txt.addCombination}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 overflow-y-auto flex-1 min-h-0">
             <Badge variant="outline" className={cn("text-[10px]", STAGE_ICONS[filterStage])}>
               {getCareerStageLabel(filterStage, language)}
             </Badge>
@@ -946,7 +1016,7 @@ export default function ReportVersionDetail({ versionId, onBack }: ReportVersion
               <Input value={comboForm.source} onChange={event => setComboForm(previous => ({ ...previous, source: event.target.value }))} />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button variant="outline" onClick={() => setComboDialog(false)}>{txt.cancel}</Button>
             <Button
               onClick={() => saveComboMutation.mutate()}
@@ -961,11 +1031,11 @@ export default function ReportVersionDetail({ versionId, onBack }: ReportVersion
 
       {/* ─── Tri-Anchor Dialog ──────────────────────────── */}
       <Dialog open={triDialog} onOpenChange={setTriDialog}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>{txt.addTriAnchor}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 overflow-y-auto flex-1 min-h-0">
             <Badge variant="outline" className={cn("text-[10px]", STAGE_ICONS[filterStage])}>
               {getCareerStageLabel(filterStage, language)}
             </Badge>
@@ -1021,7 +1091,7 @@ export default function ReportVersionDetail({ versionId, onBack }: ReportVersion
               <Input value={triForm.source} onChange={event => setTriForm(previous => ({ ...previous, source: event.target.value }))} />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button variant="outline" onClick={() => setTriDialog(false)}>{txt.cancel}</Button>
             <Button
               onClick={() => saveTriMutation.mutate()}

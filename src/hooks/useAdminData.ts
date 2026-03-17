@@ -1,7 +1,26 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logAudit } from "@/lib/auditLogger";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+
+// ─── Org Info (for current user's org) ───
+export function useOrgInfo() {
+  const { organizationId } = usePermissions();
+  return useQuery({
+    queryKey: ["org", "info", organizationId],
+    enabled: !!organizationId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("organizations")
+        .select("id, name, logo_url, plan_type, status")
+        .eq("id", organizationId!)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
 
 // ─── Super Admin: Organizations ───
 export function useOrganizations() {
@@ -84,17 +103,20 @@ export function useOrganizationsWithCounts() {
 export function useCreateOrganization() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { name: string; domain: string; plan_type: string; max_seats: number }) => {
+    mutationFn: async (input: { name: string; domain: string; plan_type: string; max_seats: number; organization_type_id?: string | null; feature_permissions?: Record<string, boolean>; logo_url?: string }) => {
+      const insertData: Record<string, unknown> = {
+        name: input.name,
+        domain: input.domain,
+        plan_type: input.plan_type,
+        max_seats: input.max_seats,
+        status: "active",
+        logo_url: input.logo_url || "",
+      };
+      if (input.organization_type_id) insertData.organization_type_id = input.organization_type_id;
+      if (input.feature_permissions) insertData.feature_permissions = input.feature_permissions;
       const { data, error } = await supabase
         .from("organizations")
-        .insert({
-          name: input.name,
-          domain: input.domain,
-          plan_type: input.plan_type,
-          max_seats: input.max_seats,
-          status: "active",
-          logo_url: "",
-        })
+        .insert(insertData)
         .select()
         .single();
       if (error) throw error;
@@ -156,7 +178,7 @@ export function useConsultants() {
     queryFn: async () => {
       const { data: consultants, error } = await supabase
         .from("profiles")
-        .select("id, email, full_name, status, created_at")
+        .select("id, email, full_name, status, created_at, feature_permissions")
         .eq("role_type", "consultant")
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -416,36 +438,25 @@ export function useOrgDepartments() {
       const deptIds = depts.map((d) => d.id);
       if (deptIds.length === 0) return [];
 
-      const { data: members } = await supabase
-        .from("profiles")
-        .select("department_id")
-        .eq("organization_id", organizationId!)
-        .in("department_id", deptIds);
+      const [profilesResult, resultsResult] = await Promise.all([
+        supabase.from("profiles").select("id, department_id").eq("organization_id", organizationId!),
+        supabase.from("assessment_results").select("user_id").eq("organization_id", organizationId!),
+      ]);
+
+      const allOrgProfiles = profilesResult.data || [];
+      const deptIdSet = new Set(deptIds);
 
       const memberCountMap = new Map<string, number>();
-      members?.forEach((m) => {
-        if (m.department_id) {
-          memberCountMap.set(m.department_id, (memberCountMap.get(m.department_id) || 0) + 1);
+      allOrgProfiles.forEach((p) => {
+        if (p.department_id && deptIdSet.has(p.department_id)) {
+          memberCountMap.set(p.department_id, (memberCountMap.get(p.department_id) || 0) + 1);
         }
       });
 
-      // Get completed assessments per department
-      const { data: allOrgResults } = await supabase
-        .from("assessment_results")
-        .select("user_id")
-        .eq("organization_id", organizationId!);
-
-      const usersWithResults = new Set(allOrgResults?.map((r) => r.user_id) || []);
-
-      const { data: profilesInDepts } = await supabase
-        .from("profiles")
-        .select("id, department_id")
-        .eq("organization_id", organizationId!)
-        .in("department_id", deptIds);
-
+      const usersWithResults = new Set((resultsResult.data || []).map((r) => r.user_id));
       const completedMap = new Map<string, number>();
-      profilesInDepts?.forEach((p) => {
-        if (p.department_id && usersWithResults.has(p.id)) {
+      allOrgProfiles.forEach((p) => {
+        if (p.department_id && deptIdSet.has(p.department_id) && usersWithResults.has(p.id)) {
           completedMap.set(p.department_id, (completedMap.get(p.department_id) || 0) + 1);
         }
       });
@@ -470,6 +481,13 @@ export function useOrgDepartments() {
 }
 
 // ─── Org Admin: Assessment Assignments ───
+export interface AssignmentUser {
+  userId: string;
+  fullName: string;
+  email: string;
+  status: string;
+}
+
 export interface AssignmentBatch {
   id: string;
   batch_id: string;
@@ -480,6 +498,7 @@ export interface AssignmentBatch {
   created_at: string;
   target_count: number;
   completed_count: number;
+  users: AssignmentUser[];
 }
 
 export function useOrgAssessments() {
@@ -488,22 +507,44 @@ export function useOrgAssessments() {
     queryKey: ["org", "assessments", organizationId],
     enabled: !!organizationId,
     queryFn: async () => {
+      // Step 1: Fetch assignments WITHOUT FK join (avoids missing FK constraint error)
       const { data, error } = await supabase
         .from("assessment_assignments")
         .select("*")
         .eq("organization_id", organizationId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
+      if (!data || data.length === 0) return [];
 
-      // Group by batch_id for aggregated view
+      // Step 2: Batch-fetch profile names for all assigned users
+      const uniqueUserIds = [...new Set(data.map((row) => row.assigned_to))];
+      const profileMap = new Map<string, { full_name: string; email: string }>();
+      if (uniqueUserIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", uniqueUserIds);
+        if (profiles) {
+          profiles.forEach((p) => profileMap.set(p.id, { full_name: p.full_name || "", email: p.email || "" }));
+        }
+      }
+
+      // Step 3: Group by batch_id for aggregated view
       const batchMap = new Map<string, AssignmentBatch>();
-      for (const row of data || []) {
+      for (const row of data) {
         const batchKey = row.batch_id || row.id;
+        const profileData = profileMap.get(row.assigned_to);
+        const assignmentUser: AssignmentUser = {
+          userId: row.assigned_to,
+          fullName: profileData?.full_name || "",
+          email: profileData?.email || "",
+          status: row.status || "pending",
+        };
         const existing = batchMap.get(batchKey);
         if (existing) {
           existing.target_count += 1;
           if (row.status === "completed") existing.completed_count += 1;
-          // Use worst status for the batch
+          existing.users.push(assignmentUser);
           if (row.status === "cancelled") existing.status = "cancelled";
         } else {
           batchMap.set(batchKey, {
@@ -516,6 +557,7 @@ export function useOrgAssessments() {
             created_at: row.created_at,
             target_count: 1,
             completed_count: row.status === "completed" ? 1 : 0,
+            users: [assignmentUser],
           });
         }
       }
@@ -535,15 +577,19 @@ export function useOrgDashboardStats() {
     queryFn: async () => {
       const [userResult, assessmentResult] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }).eq("organization_id", organizationId!),
-        supabase.from("assessment_results").select("id, completion_time_seconds", { count: "exact" }).eq("organization_id", organizationId!),
+        supabase.from("assessment_results").select("user_id, completion_time_seconds").eq("organization_id", organizationId!),
       ]);
 
       const totalUsers = userResult.count || 0;
-      const completedAssessments = assessmentResult.count || 0;
-      const completionRate = totalUsers > 0 ? ((completedAssessments / totalUsers) * 100).toFixed(1) : "0";
+      const assessments = assessmentResult.data || [];
 
-      const avgTime = assessmentResult.data && assessmentResult.data.length > 0
-        ? (assessmentResult.data.reduce((sum, r) => sum + (r.completion_time_seconds || 0), 0) / assessmentResult.data.length / 60).toFixed(1)
+      // Count unique users who completed at least one assessment (same user only counts once)
+      const uniqueCompletedUsers = new Set(assessments.map((a) => a.user_id)).size;
+      const completedAssessments = uniqueCompletedUsers;
+      const completionRate = totalUsers > 0 ? Math.min(100, (uniqueCompletedUsers / totalUsers) * 100).toFixed(1) : "0";
+
+      const avgTime = assessments.length > 0
+        ? (assessments.reduce((sum, r) => sum + (r.completion_time_seconds || 0), 0) / assessments.length / 60).toFixed(1)
         : "0";
 
       return {
@@ -803,7 +849,7 @@ export function useConsultantAssignments() {
 export function useUpdateOrganization() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id: string; name?: string; domain?: string; plan_type?: string; max_seats?: number; status?: string }) => {
+    mutationFn: async (input: { id: string; name?: string; domain?: string; plan_type?: string; max_seats?: number; status?: string; enable_career_anchor?: boolean; enable_ideal_card?: boolean; enable_combined?: boolean; organization_type_id?: string | null; feature_permissions?: Record<string, boolean>; logo_url?: string }) => {
       const { id, ...updates } = input;
       const { data, error } = await supabase.from("organizations").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id).select().single();
       if (error) throw error;
@@ -921,8 +967,12 @@ export function useDeleteProfile() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("profiles").delete().eq("id", id);
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { userId: id },
+      });
       if (error) throw error;
+      if (data && !data.success) throw new Error(data.error || "Delete failed");
+      logAudit({ operationType: "delete_user", targetType: "user", targetId: id, targetDescription: `Deleted user: ${id}` });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin"] }); queryClient.invalidateQueries({ queryKey: ["org"] }); },
   });
@@ -994,6 +1044,83 @@ export function useDeleteDepartment() {
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["org"] }); },
+  });
+}
+
+// ─── MUTATIONS: Consultant Clients ───
+export function useCreateConsultantClient() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (input: { full_name: string; email: string; phone?: string; notes?: string }) => {
+      const { data, error } = await supabase.from("profiles").insert({
+        id: crypto.randomUUID(),
+        email: input.email,
+        full_name: input.full_name,
+        phone: input.phone || "",
+        notes: input.notes || "",
+        consultant_id: user!.id,
+        role_type: "user",
+        role: "user",
+        status: "active",
+        avatar_url: "",
+        career_stage: "",
+      }).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["consultant"] }); },
+  });
+}
+
+export function useCreateConsultantClientsBulk() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (clients: { full_name: string; email: string }[]) => {
+      const records = clients.map((c) => ({
+        id: crypto.randomUUID(),
+        email: c.email,
+        full_name: c.full_name,
+        consultant_id: user!.id,
+        role_type: "user",
+        role: "user",
+        status: "active",
+        avatar_url: "",
+        career_stage: "",
+        phone: "",
+        notes: "",
+      }));
+      const { data, error } = await supabase.from("profiles").insert(records).select();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["consultant"] }); },
+  });
+}
+
+export function useUpdateConsultantClient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; full_name?: string; email?: string; phone?: string; status?: string; notes?: string }) => {
+      const { id, ...updates } = input;
+      const { data, error } = await supabase.from("profiles").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["consultant"] }); },
+  });
+}
+
+export function useDeleteConsultantClient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Remove consultant_id link rather than deleting the profile
+      const { error } = await supabase.from("profiles").update({ consultant_id: null, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["consultant"] }); },
   });
 }
 
@@ -1127,11 +1254,11 @@ export function useOrgAssessmentReports() {
       if (error) throw error;
 
       const userIds = [...new Set(results.map((r) => r.user_id))];
-      let userMap = new Map<string, { name: string; email: string; deptId: string | null; deptName: string | null }>();
+      let userMap = new Map<string, { name: string; email: string; deptId: string | null; deptName: string | null; careerStage: string | null }>();
       if (userIds.length > 0) {
         const { data: profiles } = await supabase
           .from("profiles")
-          .select("id, full_name, email, department_id")
+          .select("id, full_name, email, department_id, career_stage")
           .in("id", userIds);
         if (profiles) {
           const deptIds = [...new Set(profiles.filter((p) => p.department_id).map((p) => p.department_id!))];
@@ -1146,6 +1273,7 @@ export function useOrgAssessmentReports() {
               email: p.email || "",
               deptId: p.department_id,
               deptName: p.department_id ? deptMap.get(p.department_id) || null : null,
+              careerStage: (p as Record<string, unknown>).career_stage as string | null ?? null,
             })
           );
         }
@@ -1156,6 +1284,7 @@ export function useOrgAssessmentReports() {
         userName: userMap.get(r.user_id)?.name || "",
         userEmail: userMap.get(r.user_id)?.email || "",
         deptName: userMap.get(r.user_id)?.deptName || null,
+        careerStage: userMap.get(r.user_id)?.careerStage || null,
       }));
     },
   });
@@ -1234,6 +1363,445 @@ export function useOrgUserReports(reportType?: string) {
         userName: userMap.get(r.user_id)?.name || "",
         userEmail: userMap.get(r.user_id)?.email || "",
       }));
+    },
+  });
+}
+
+// ─── Ideal Card Results: All (Super Admin) ───
+export function useAllIdealCardResults() {
+  return useQuery({
+    queryKey: ["admin", "all-ideal-card-results"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ideal_card_results")
+        .select("id, user_id, top10_cards, category_distribution, created_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      const userIds = [...new Set(data.map((record) => record.user_id))];
+      const userMap = new Map<string, { name: string; email: string; orgId: string | null; careerStage: string | null }>();
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name, email, organization_id, career_stage")
+          .in("id", userIds);
+        if (profiles) {
+          profiles.forEach((profile) =>
+            userMap.set(profile.id, {
+              name: profile.full_name || profile.email || "",
+              email: profile.email || "",
+              orgId: profile.organization_id,
+              careerStage: profile.career_stage,
+            })
+          );
+        }
+      }
+
+      const orgIds = [...new Set([...userMap.values()].map((u) => u.orgId).filter(Boolean))] as string[];
+      const orgMap = new Map<string, string>();
+      if (orgIds.length > 0) {
+        const { data: orgs } = await supabase
+          .from("organizations")
+          .select("id, name")
+          .in("id", orgIds);
+        if (orgs) orgs.forEach((org) => orgMap.set(org.id, org.name));
+      }
+
+      return data.map((record) => {
+        const userInfo = userMap.get(record.user_id);
+        return {
+          ...record,
+          userName: userInfo?.name || "",
+          userEmail: userInfo?.email || "",
+          orgName: userInfo?.orgId ? (orgMap.get(userInfo.orgId) || null) : null,
+          careerStage: userInfo?.careerStage || null,
+        };
+      });
+    },
+  });
+}
+
+// ─── Ideal Card Results: Org-scoped ───
+export function useOrgIdealCardResults() {
+  const { organizationId } = usePermissions();
+  return useQuery({
+    queryKey: ["org", "ideal-card-results", organizationId],
+    enabled: !!organizationId,
+    queryFn: async () => {
+      // Get org member IDs first
+      const { data: orgProfiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, department_id, career_stage")
+        .eq("organization_id", organizationId!);
+      if (profilesError) throw profilesError;
+      if (!orgProfiles || orgProfiles.length === 0) return [];
+
+      const memberIds = orgProfiles.map((profile) => profile.id);
+      const userMap = new Map<string, { name: string; email: string; deptId: string | null; careerStage: string | null }>();
+      orgProfiles.forEach((profile) =>
+        userMap.set(profile.id, {
+          name: profile.full_name || profile.email || "",
+          email: profile.email || "",
+          deptId: profile.department_id,
+          careerStage: profile.career_stage,
+        })
+      );
+
+      // Fetch ideal card results for these members
+      const { data, error } = await supabase
+        .from("ideal_card_results")
+        .select("id, user_id, top10_cards, category_distribution, created_at")
+        .in("user_id", memberIds)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      // Get department names
+      const deptIds = [...new Set([...userMap.values()].map((u) => u.deptId).filter(Boolean))] as string[];
+      const deptMap = new Map<string, string>();
+      if (deptIds.length > 0) {
+        const { data: depts } = await supabase
+          .from("departments")
+          .select("id, name")
+          .in("id", deptIds);
+        if (depts) depts.forEach((dept) => deptMap.set(dept.id, dept.name));
+      }
+
+      return (data || []).map((record) => {
+        const userInfo = userMap.get(record.user_id);
+        return {
+          ...record,
+          userName: userInfo?.name || "",
+          userEmail: userInfo?.email || "",
+          deptName: userInfo?.deptId ? (deptMap.get(userInfo.deptId) || null) : null,
+          careerStage: userInfo?.careerStage || null,
+        };
+      });
+    },
+  });
+}
+
+// ─── Fusion Reports: All (super admin) ───
+export function useAllFusionReports() {
+  return useQuery({
+    queryKey: ["admin", "all-fusion-reports"],
+    queryFn: async () => {
+      type FusionEntry = {
+        id: string;
+        user_id: string;
+        anchor_scores: Record<string, number>;
+        value_ranking: Array<{ rank: number; cardId: number; category: string; label?: string; labelEn?: string }>;
+        conflict_index: number;
+        motivation_alignment: number;
+        core_positioning: string;
+        generated_at: string;
+        userName: string;
+        userEmail: string;
+        orgName?: string | null;
+        careerStage?: string | null;
+      };
+      const allEntries: FusionEntry[] = [];
+
+      // ── Source 1: Batch combined assessment results ──
+      const { data: combinedBatches } = await supabase
+        .from("scpc_assessment_batches")
+        .select("id, organization_name")
+        .eq("assessment_type", "combined");
+
+      if (combinedBatches && combinedBatches.length > 0) {
+        const batchIds = combinedBatches.map((batch) => batch.id);
+        const batchOrgMap = new Map<string, string>();
+        combinedBatches.forEach((batch) => batchOrgMap.set(batch.id, batch.organization_name || ""));
+
+        const { data: batchResults } = await supabase
+          .from("scpc_assessment_results")
+          .select("id, session_id, batch_id, participant_name, email, department, work_years, calculated_scores, value_ranking, completed_at")
+          .in("batch_id", batchIds)
+          .order("completed_at", { ascending: false });
+
+        (batchResults || []).forEach((record) => {
+          const workYears = record.work_years || 0;
+          const careerStage = workYears <= 5 ? "entry" : workYears <= 12 ? "mid" : "senior";
+          allEntries.push({
+            id: record.id,
+            user_id: record.session_id || record.id,
+            anchor_scores: (record.calculated_scores || {}) as Record<string, number>,
+            value_ranking: ((record.value_ranking || []) as Array<{ rank: number; cardId: number; category: string; label?: string; labelEn?: string }>),
+            conflict_index: 0,
+            motivation_alignment: 0,
+            core_positioning: "",
+            generated_at: record.completed_at,
+            userName: record.participant_name || "",
+            userEmail: record.email || "",
+            orgName: batchOrgMap.get(record.batch_id) || null,
+            careerStage,
+          });
+        });
+      }
+
+      // ── Source 2: Individual user assessment_results + ideal_card_results ──
+      const { data: anchorResults } = await supabase
+        .from("assessment_results")
+        .select("id, user_id, score_tf, score_gm, score_au, score_se, score_ec, score_sv, score_ch, score_ls, created_at")
+        .order("created_at", { ascending: false });
+
+      const { data: idealCardResults } = await supabase
+        .from("ideal_card_results")
+        .select("id, user_id, ranked_cards, created_at")
+        .order("created_at", { ascending: false });
+
+      if (anchorResults && anchorResults.length > 0 && idealCardResults && idealCardResults.length > 0) {
+        // Group by user
+        const anchorByUser = new Map<string, typeof anchorResults>();
+        anchorResults.forEach((record) => {
+          const existing = anchorByUser.get(record.user_id) || [];
+          existing.push(record);
+          anchorByUser.set(record.user_id, existing);
+        });
+
+        const idealByUser = new Map<string, typeof idealCardResults>();
+        idealCardResults.forEach((record) => {
+          const existing = idealByUser.get(record.user_id) || [];
+          existing.push(record);
+          idealByUser.set(record.user_id, existing);
+        });
+
+        // Find users who have BOTH types
+        const usersWithBoth = [...anchorByUser.keys()].filter((userId) => idealByUser.has(userId));
+
+        // Fetch profiles for these users
+        let userMap = new Map<string, { name: string; email: string; orgId: string | null; orgName: string | null; careerStage: string | null }>();
+        if (usersWithBoth.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, full_name, email, organization_id, career_stage")
+            .in("id", usersWithBoth);
+          if (profiles) {
+            const orgIds = [...new Set(profiles.filter((p) => p.organization_id).map((p) => p.organization_id!))];
+            const orgMap = new Map<string, string>();
+            if (orgIds.length > 0) {
+              const { data: orgs } = await supabase.from("organizations").select("id, name").in("id", orgIds);
+              if (orgs) orgs.forEach((o) => orgMap.set(o.id, o.name));
+            }
+            profiles.forEach((p) =>
+              userMap.set(p.id, {
+                name: p.full_name || p.email || "",
+                email: p.email || "",
+                orgId: p.organization_id,
+                orgName: p.organization_id ? orgMap.get(p.organization_id) || null : null,
+                careerStage: p.career_stage,
+              })
+            );
+          }
+        }
+
+        // Pair each anchor result with the closest ideal card result
+        usersWithBoth.forEach((userId) => {
+          const userAnchors = anchorByUser.get(userId) || [];
+          const userCards = idealByUser.get(userId) || [];
+          const userInfo = userMap.get(userId);
+
+          userAnchors.forEach((anchor) => {
+            // Find the closest ideal card result by time
+            const anchorTime = new Date(anchor.created_at).getTime();
+            const closestCard = userCards.reduce((best, current) => {
+              const currentDiff = Math.abs(new Date(current.created_at).getTime() - anchorTime);
+              const bestDiff = Math.abs(new Date(best.created_at).getTime() - anchorTime);
+              return currentDiff < bestDiff ? current : best;
+            });
+
+            const rankedCards = (closestCard.ranked_cards || []) as Array<{ rank: number; cardId: number; category: string; label?: string; labelEn?: string }>;
+            if (rankedCards.length === 0) return;
+
+            const anchorScores: Record<string, number> = {
+              TF: anchor.score_tf || 0,
+              GM: anchor.score_gm || 0,
+              AU: anchor.score_au || 0,
+              SE: anchor.score_se || 0,
+              EC: anchor.score_ec || 0,
+              SV: anchor.score_sv || 0,
+              CH: anchor.score_ch || 0,
+              LS: anchor.score_ls || 0,
+            };
+
+            allEntries.push({
+              id: `ind-${anchor.id}`,
+              user_id: userId,
+              anchor_scores: anchorScores,
+              value_ranking: rankedCards,
+              conflict_index: 0,
+              motivation_alignment: 0,
+              core_positioning: "",
+              generated_at: anchor.created_at,
+              userName: userInfo?.name || "",
+              userEmail: userInfo?.email || "",
+              orgName: userInfo?.orgName || null,
+              careerStage: userInfo?.careerStage || null,
+            });
+          });
+        });
+      }
+
+      // Sort all entries by date descending
+      allEntries.sort((a, b) => new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime());
+      return allEntries;
+    },
+  });
+}
+
+// ─── Fusion Reports: Org-scoped ───
+export function useOrgFusionReports() {
+  const { organizationId } = usePermissions();
+  return useQuery({
+    queryKey: ["org", "fusion-reports", organizationId],
+    enabled: !!organizationId,
+    queryFn: async () => {
+      type FusionEntry = {
+        id: string;
+        user_id: string;
+        anchor_scores: Record<string, number>;
+        value_ranking: Array<{ rank: number; cardId: number; category: string; label?: string; labelEn?: string }>;
+        conflict_index: number;
+        motivation_alignment: number;
+        core_positioning: string;
+        generated_at: string;
+        userName: string;
+        userEmail: string;
+        deptName?: string | null;
+        careerStage?: string | null;
+      };
+      const allEntries: FusionEntry[] = [];
+
+      // ── Source 1: Batch combined assessment results ──
+      const { data: combinedBatches } = await supabase
+        .from("scpc_assessment_batches")
+        .select("id, organization_name")
+        .eq("assessment_type", "combined")
+        .eq("organization_id", organizationId!);
+
+      if (combinedBatches && combinedBatches.length > 0) {
+        const batchIds = combinedBatches.map((batch) => batch.id);
+
+        const { data: batchResults } = await supabase
+          .from("scpc_assessment_results")
+          .select("id, session_id, batch_id, participant_name, email, department, work_years, calculated_scores, value_ranking, completed_at")
+          .in("batch_id", batchIds)
+          .order("completed_at", { ascending: false });
+
+        (batchResults || []).forEach((record) => {
+          const workYears = record.work_years || 0;
+          const careerStage = workYears <= 5 ? "entry" : workYears <= 12 ? "mid" : "senior";
+          allEntries.push({
+            id: record.id,
+            user_id: record.session_id || record.id,
+            anchor_scores: (record.calculated_scores || {}) as Record<string, number>,
+            value_ranking: ((record.value_ranking || []) as Array<{ rank: number; cardId: number; category: string; label?: string; labelEn?: string }>),
+            conflict_index: 0,
+            motivation_alignment: 0,
+            core_positioning: "",
+            generated_at: record.completed_at,
+            userName: record.participant_name || "",
+            userEmail: record.email || "",
+            deptName: record.department || null,
+            careerStage,
+          });
+        });
+      }
+
+      // ── Source 2: Individual user assessment_results + ideal_card_results for org members ──
+      const { data: orgProfiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, department_id, career_stage")
+        .eq("organization_id", organizationId!);
+
+      if (orgProfiles && orgProfiles.length > 0) {
+        const memberIds = orgProfiles.map((p) => p.id);
+        const profileMap = new Map(orgProfiles.map((p) => [p.id, p]));
+
+        // Fetch department names
+        const deptIds = [...new Set(orgProfiles.filter((p) => p.department_id).map((p) => p.department_id!))];
+        const deptMap = new Map<string, string>();
+        if (deptIds.length > 0) {
+          const { data: depts } = await supabase.from("departments").select("id, name").in("id", deptIds);
+          if (depts) depts.forEach((d) => deptMap.set(d.id, d.name));
+        }
+
+        const { data: anchorResults } = await supabase
+          .from("assessment_results")
+          .select("id, user_id, score_tf, score_gm, score_au, score_se, score_ec, score_sv, score_ch, score_ls, created_at")
+          .in("user_id", memberIds)
+          .order("created_at", { ascending: false });
+
+        const { data: idealCardResults } = await supabase
+          .from("ideal_card_results")
+          .select("id, user_id, ranked_cards, created_at")
+          .in("user_id", memberIds)
+          .order("created_at", { ascending: false });
+
+        if (anchorResults && anchorResults.length > 0 && idealCardResults && idealCardResults.length > 0) {
+          const anchorByUser = new Map<string, typeof anchorResults>();
+          anchorResults.forEach((record) => {
+            const existing = anchorByUser.get(record.user_id) || [];
+            existing.push(record);
+            anchorByUser.set(record.user_id, existing);
+          });
+
+          const idealByUser = new Map<string, typeof idealCardResults>();
+          idealCardResults.forEach((record) => {
+            const existing = idealByUser.get(record.user_id) || [];
+            existing.push(record);
+            idealByUser.set(record.user_id, existing);
+          });
+
+          const usersWithBoth = [...anchorByUser.keys()].filter((userId) => idealByUser.has(userId));
+
+          usersWithBoth.forEach((userId) => {
+            const userAnchors = anchorByUser.get(userId) || [];
+            const userCards = idealByUser.get(userId) || [];
+            const profile = profileMap.get(userId);
+
+            userAnchors.forEach((anchor) => {
+              const anchorTime = new Date(anchor.created_at).getTime();
+              const closestCard = userCards.reduce((best, current) => {
+                const currentDiff = Math.abs(new Date(current.created_at).getTime() - anchorTime);
+                const bestDiff = Math.abs(new Date(best.created_at).getTime() - anchorTime);
+                return currentDiff < bestDiff ? current : best;
+              });
+
+              const rankedCards = (closestCard.ranked_cards || []) as Array<{ rank: number; cardId: number; category: string; label?: string; labelEn?: string }>;
+              if (rankedCards.length === 0) return;
+
+              const anchorScores: Record<string, number> = {
+                TF: anchor.score_tf || 0,
+                GM: anchor.score_gm || 0,
+                AU: anchor.score_au || 0,
+                SE: anchor.score_se || 0,
+                EC: anchor.score_ec || 0,
+                SV: anchor.score_sv || 0,
+                CH: anchor.score_ch || 0,
+                LS: anchor.score_ls || 0,
+              };
+
+              allEntries.push({
+                id: `ind-${anchor.id}`,
+                user_id: userId,
+                anchor_scores: anchorScores,
+                value_ranking: rankedCards,
+                conflict_index: 0,
+                motivation_alignment: 0,
+                core_positioning: "",
+                generated_at: anchor.created_at,
+                userName: profile?.full_name || profile?.email || "",
+                userEmail: profile?.email || "",
+                deptName: profile?.department_id ? deptMap.get(profile.department_id) || null : null,
+                careerStage: profile?.career_stage || null,
+              });
+            });
+          });
+        }
+      }
+
+      allEntries.sort((a, b) => new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime());
+      return allEntries;
     },
   });
 }

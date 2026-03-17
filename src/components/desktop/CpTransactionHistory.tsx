@@ -89,8 +89,8 @@ const TXT = {
   "zh-TW": {
     title: "交易明細",
     all: "全部",
-    paidRecharge: "充值購買",
-    rechargeBonus: "充值贈送",
+    paidRecharge: "儲值購買",
+    rechargeBonus: "儲值贈送",
     activityReward: "活動獎勵",
     consumption: "消費",
     refund: "退費",
@@ -102,8 +102,8 @@ const TXT = {
     balanceAfter: "交易後餘額",
     orderId: "訂單",
     typeLabels: {
-      recharge: "充值購買",
-      recharge_bonus: "充值贈送",
+      recharge: "儲值購買",
+      recharge_bonus: "儲值贈送",
       activity_grant: "活動贈點",
       consumption: "消費扣點",
       refund: "退費返還",
@@ -268,7 +268,7 @@ export default function CpTransactionHistory({ transactions, maxItems }: CpTrans
                         <p className="text-sm font-medium text-slate-800 truncate">
                           {t.typeLabels[transaction.transaction_type] ?? transaction.transaction_type}
                         </p>
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-200 text-slate-500">
+                        <Badge variant="outline" className="text-[10px] px-1.5 h-5 border-slate-200 text-slate-500">
                           {t.cpTypeLabels[transaction.cp_type] ?? transaction.cp_type}
                         </Badge>
                         {hasBreakdown && (

@@ -1,27 +1,23 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Clock, Target, AlertTriangle, User, ChevronDown, LogOut, Briefcase, Crown, Compass, BarChart3, FileText, Zap, ListChecks, Sparkles, Heart, Layers, Gem, Mail, Lock, Eye, EyeOff, Loader2, ClipboardList, Gift, Wallet } from "lucide-react";
-import { useTestAuth, TEST_ACCOUNTS, getWorkExperienceDescription, isConsoleRole, getTestConsolePath, getRoleColor, getRoleInitials, getCategoryLabel, type UserRole, type CareerStage, type AssessmentMode, type LanguageKey } from "@/hooks/useTestAuth";
+import { ArrowRight, Clock, Target, AlertTriangle, User, ChevronDown, LogOut, Briefcase, Crown, Compass, BarChart3, FileText, Zap, ListChecks, Heart, Layers, Gem, Mail, Lock, Eye, EyeOff, Loader2, ClipboardList, Gift, Wallet } from "lucide-react";
+import { useTestAuth, getWorkExperienceDescription, type LanguageKey } from "@/hooks/useTestAuth";
 import { useAuth } from "@/hooks/useAuth";
-import { getRoleLabel, getConsolePath, findConsoleRoleFromProfile } from "@/lib/permissions";
+import { getConsolePath, findConsoleRoleFromProfile } from "@/lib/permissions";
 import { navigateToConsoleWithSwap } from "@/lib/consoleUtils";
 import type { RoleType } from "@/lib/permissions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useMyPendingAssignments } from "@/hooks/useMyAssignments";
-import { useCpWallet } from "@/hooks/useCpWallet";
-import CpWalletCard from "@/components/desktop/CpWalletCard";
+
+import { useQueryClient } from "@tanstack/react-query";
 import { useCpPurchase } from "@/hooks/useCpPurchase";
 import CpPurchaseModal from "@/components/desktop/CpPurchaseModal";
+import { useOrgAssessmentPermissions } from "@/hooks/useOrgAssessmentPermissions";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
-const CATEGORY_ORDER = ["platform", "organization", "consultant", "individual"] as const;
-const ROLES_BY_CATEGORY: Record<string, UserRole[]> = {
-  platform: ["super_admin", "partner"],
-  organization: ["org_admin", "hr", "department_manager", "employee"],
-  consultant: ["consultant", "client"],
-  individual: ["individual"],
-};
+
 import { useTranslation, type Language } from "@/hooks/useLanguage";
 import LanguageSwitcher from "@/components/desktop/LanguageSwitcher";
 import { cn } from "@/lib/utils";
@@ -32,8 +28,9 @@ const LOGO_URL = "https://b.ux-cdn.com/uxarts/20260210/bd2fe8a1fd4d4cd5bcca019a0
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t, language } = useTranslation();
-  const { isTestLoggedIn, testRole, careerStage, workYears, isExecutive, isEntrepreneur, assessmentMode, testLogin, testLogout, setCareerStage, setWorkYears, setIsExecutive, setIsEntrepreneur, setAssessmentMode } = useTestAuth();
+  const { careerStage, workYears, isExecutive, isEntrepreneur, assessmentMode, setCareerStage, setWorkYears, setIsExecutive, setIsEntrepreneur, setAssessmentMode } = useTestAuth();
   const [yearsInputValue, setYearsInputValue] = useState(workYears !== null ? String(workYears) : "");
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showCareerStage, setShowCareerStage] = useState(false);
@@ -45,20 +42,60 @@ export default function HomePage() {
   const [showPassword, setShowPassword] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
   const { data: pendingAssignments } = useMyPendingAssignments();
-  const cpWalletData = useCpWallet();
-  const cpPurchase = useCpPurchase();
 
-  const handleRoleSelect = async (role: UserRole) => {
-    await testLogin(role);
-    await refreshProfile();
-    setShowRoleDropdown(false);
-    const consolePath = getTestConsolePath(role);
-    if (consolePath !== "/") {
-      navigate(consolePath);
-    } else {
-      setShowCareerStage(true);
+  const { isCpPointsEnabled } = useFeaturePermissions();
+  const queryClient = useQueryClient();
+  const cpPurchase = useCpPurchase();
+  const { data: orgPermissions } = useOrgAssessmentPermissions();
+  const isCareerAnchorEnabled = orgPermissions?.enableCareerAnchor !== false;
+  const isIdealCardEnabled = orgPermissions?.enableIdealCard !== false;
+  const isCombinedEnabled = orgPermissions?.enableCombined !== false;
+
+  const [showVerifyCode, setShowVerifyCode] = useState(false);
+  const [verifyCode, setVerifyCode] = useState("");
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [pendingTargetPath, setPendingTargetPath] = useState<string | null>(null);
+
+  useEffect(() => {
+    if ((location.state as any)?.scrollToAssessment) {
+      // Clear the state to prevent re-scrolling on re-renders
+      window.history.replaceState({}, '');
+      setTimeout(() => {
+        document.getElementById('assessment-select')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
     }
-  };
+  }, [location.state]);
+
+  // Auto-refund CP if user abandoned a previous assessment without completing
+  useEffect(() => {
+    const pendingTxnId = sessionStorage.getItem("pending_cp_transaction_id");
+    if (!pendingTxnId || !user?.id) return;
+    supabase.functions
+      .invoke("refund-cp", {
+        body: { user_id: user.id, transaction_id: pendingTxnId, reason: "Assessment abandoned" },
+      })
+      .then(({ data }) => {
+        if (data?.success) {
+          sessionStorage.removeItem("pending_cp_transaction_id");
+          queryClient.invalidateQueries({ queryKey: ["cp-wallet"] });
+          queryClient.invalidateQueries({ queryKey: ["cp-transactions"] });
+          toast.info(
+            language === "zh-TW"
+              ? "\u5DF2\u9000\u9084\u672A\u5B8C\u6210\u6E2C\u8A55\u7684 CP \u9EDE"
+              : language === "en"
+                ? "CP refunded for incomplete assessment"
+                : "\u5DF2\u9000\u8FD8\u672A\u5B8C\u6210\u6D4B\u8BC4\u7684 CP \u70B9"
+          );
+        } else {
+          // Refund failed — still clear storage so it doesn't retry endlessly
+          sessionStorage.removeItem("pending_cp_transaction_id");
+        }
+      })
+      .catch(() => {
+        sessionStorage.removeItem("pending_cp_transaction_id");
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const handleEmailLogin = async () => {
     if (!loginEmail || !loginPassword) return;
@@ -102,14 +139,31 @@ export default function HomePage() {
   };
 
   const handleStartAssessment = async () => {
-    if (!isTestLoggedIn && !user) {
-      // Fallback: check Supabase session directly in case React state is delayed
+    if (!user) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setShowRoleDropdown(true);
         return;
       }
     }
+    setShowCareerStage(true);
+  };
+
+  const scrollToAssessmentSelect = () => {
+    document.getElementById('assessment-select')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleStartSpecificAssessment = async (entryType: 'career_anchor' | 'ideal_card' | 'combined') => {
+    if (!user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        // Remember which entry they wanted so after login we can pre-select
+        setSelectedEntry(entryType);
+        setShowRoleDropdown(true);
+        return;
+      }
+    }
+    setSelectedEntry(entryType);
     setShowCareerStage(true);
   };
 
@@ -151,17 +205,18 @@ export default function HomePage() {
       return;
     }
 
-    // CP purchase gate — pricing by entry type
-    const serviceNameMap = {
+    // CP purchase gate (when CP feature is enabled)
+    if (isCpPointsEnabled) {
+    const serviceNameMap: Record<string, Record<string, string>> = {
       career_anchor: { en: "Career Anchor Assessment", "zh-TW": "職業錨測評", "zh-CN": "职业锚测评" },
-      ideal_card: { en: "Ideal Life Card Assessment", "zh-TW": "理想人生卡測評", "zh-CN": "理想人生卡测评" },
-      combined: { en: "Combined Assessment (Anchor + Life Card)", "zh-TW": "聯合測評（職業錨＋理想人生卡）", "zh-CN": "联合测评（职业锚＋理想人生卡）" },
+      ideal_card: { en: "Espresso Card Assessment", "zh-TW": "理想人生卡測評", "zh-CN": "理想人生卡测评" },
+      combined: { en: "Integration Assessment (Anchor + Espresso Card)", "zh-TW": "整合測評（職業錨＋理想人生卡）", "zh-CN": "整合测评（职业锚＋理想人生卡）" },
     };
     const cpPriceMap = { career_anchor: 100, ideal_card: 80, combined: 150 };
     const descriptionMap = {
       career_anchor: { en: "Complete career anchor assessment", "zh-TW": "完成職業錨測評", "zh-CN": "完成职业锚测评" },
-      ideal_card: { en: "Complete ideal life card assessment", "zh-TW": "完成理想人生卡測評", "zh-CN": "完成理想人生卡测评" },
-      combined: { en: "Complete combined assessment (3 reports)", "zh-TW": "完成聯合測評（生成3份報告）", "zh-CN": "完成联合测评（生成3份报告）" },
+      ideal_card: { en: "Complete Espresso Card assessment", "zh-TW": "完成理想人生卡測評", "zh-CN": "完成理想人生卡测评" },
+      combined: { en: "Complete integration assessment (3 reports)", "zh-TW": "完成整合測評（生成3份報告）", "zh-CN": "完成整合测评（生成3份报告）" },
     };
 
     const assessmentService = {
@@ -174,6 +229,99 @@ export default function HomePage() {
     cpPurchase.initiatePurchase(assessmentService, () => {
       navigate(targetPath);
     });
+      return;
+    }
+
+    // Org users with CP disabled → verification code gate
+    if (profile?.organization_id) {
+      setPendingTargetPath(targetPath);
+      setShowVerifyCode(true);
+      return;
+    }
+
+    // Individual users without org — navigate directly
+    navigate(targetPath);
+  };
+
+  const handleVerifyCode = async () => {
+    if (!verifyCode.trim() || !user || !profile?.organization_id) return;
+    setVerifyLoading(true);
+    const trimmedCode = verifyCode.trim().toUpperCase();
+    const { data: codeRow, error } = await supabase
+      .from("org_assessment_codes")
+      .select("id, max_uses, used_count, max_uses_career_anchor, used_count_career_anchor, max_uses_ideal_card, used_count_ideal_card, max_uses_combined, used_count_combined, is_active, expires_at, organization_id")
+      .eq("code", trimmedCode)
+      .eq("organization_id", profile.organization_id)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (error || !codeRow) {
+      toast.error(language === "en" ? "Invalid authorization code" : language === "zh-TW" ? "\u6388\u6B0A\u78BC\u7121\u6548" : "\u6388\u6743\u7801\u65E0\u6548");
+      setVerifyLoading(false);
+      return;
+    }
+    if (codeRow.expires_at && new Date(codeRow.expires_at) < new Date()) {
+      toast.error(language === "en" ? "Authorization code has expired" : language === "zh-TW" ? "\u6388\u6B0A\u78BC\u5DF2\u904E\u671F" : "\u6388\u6743\u7801\u5DF2\u8FC7\u671F");
+      setVerifyLoading(false);
+      return;
+    }
+
+    // Per-type limit check
+    const assessmentType = selectedEntry || "career_anchor";
+    const typeMaxField = assessmentType === "career_anchor" ? "max_uses_career_anchor"
+      : assessmentType === "ideal_card" ? "max_uses_ideal_card" : "max_uses_combined";
+    const typeUsedField = assessmentType === "career_anchor" ? "used_count_career_anchor"
+      : assessmentType === "ideal_card" ? "used_count_ideal_card" : "used_count_combined";
+    const typeMax = (codeRow as Record<string, number>)[typeMaxField] ?? codeRow.max_uses;
+    const typeUsed = (codeRow as Record<string, number>)[typeUsedField] ?? codeRow.used_count;
+
+    if (typeMax > 0 && typeUsed >= typeMax) {
+      toast.error(language === "zh-TW" ? "\u6E2C\u8A66\u78BC\u6578\u91CF\u5DF2\u9054\u4E0A\u9650" : language === "zh-CN" ? "\u6D4B\u8BD5\u7801\u6570\u91CF\u5DF2\u8FBE\u4E0A\u9650" : "Assessment quota reached");
+      setVerifyLoading(false);
+      return;
+    }
+
+    // Per-type increment
+    const updatePayload: Record<string, unknown> = {
+      [typeUsedField]: typeUsed + 1,
+      used_count: codeRow.used_count + 1,
+      updated_at: new Date().toISOString(),
+    };
+    const { error: updateError } = await supabase
+      .from("org_assessment_codes")
+      .update(updatePayload)
+      .eq("id", codeRow.id);
+    if (updateError) {
+      toast.error(language === "en" ? "Verification failed" : language === "zh-TW" ? "\u9A57\u8B49\u5931\u6557" : "\u9A8C\u8BC1\u5931\u8D25");
+      setVerifyLoading(false);
+      return;
+    }
+
+    // Auto-deactivate only when ALL types exhausted
+    const newCareerUsed = assessmentType === "career_anchor" ? codeRow.used_count_career_anchor + 1 : codeRow.used_count_career_anchor;
+    const newCardUsed = assessmentType === "ideal_card" ? codeRow.used_count_ideal_card + 1 : codeRow.used_count_ideal_card;
+    const newComboUsed = assessmentType === "combined" ? codeRow.used_count_combined + 1 : codeRow.used_count_combined;
+    const allExhausted =
+      (codeRow.max_uses_career_anchor <= 0 || newCareerUsed >= codeRow.max_uses_career_anchor) &&
+      (codeRow.max_uses_ideal_card <= 0 || newCardUsed >= codeRow.max_uses_ideal_card) &&
+      (codeRow.max_uses_combined <= 0 || newComboUsed >= codeRow.max_uses_combined);
+    if (allExhausted) {
+      await supabase.from("org_assessment_codes").update({ is_active: false }).eq("id", codeRow.id);
+    }
+
+    await supabase.from("org_assessment_code_usage").insert({
+      code_id: codeRow.id,
+      user_id: user.id,
+      assessment_type: assessmentType,
+    });
+    setVerifyLoading(false);
+    setShowVerifyCode(false);
+    setVerifyCode("");
+    toast.success(language === "en" ? "Verified successfully" : language === "zh-TW" ? "\u9A57\u8B49\u6210\u529F" : "\u9A8C\u8BC1\u6210\u529F");
+    if (pendingTargetPath) {
+      navigate(pendingTargetPath);
+      setPendingTargetPath(null);
+    }
   };
 
   const canStartAssessment = selectedEntry !== null;
@@ -225,44 +373,44 @@ export default function HomePage() {
   const outputs: Record<Language, Array<{ icon: typeof Compass; title: string; description: string }>> = {
     "zh-CN": [
       { icon: Compass, title: "职业锚雷达图", description: "8维度标准化得分可视化，清晰呈现你的职业价值取向分布" },
-      { icon: Target, title: "高敏感锚识别", description: "识别得分>80的高敏感锚点，明确你的核心职业驱动力" },
+      { icon: Target, title: "核心锚识别", description: "识别得分>80的核心锚点，明确你的核心职业驱动力" },
       { icon: AlertTriangle, title: "冲突锚警示", description: "识别逻辑上互斥却同时高分的锚点，揭示潜在的内心冲突" },
       { icon: FileText, title: "不适合清单", description: "明确列出你不适合的工作类型和容易痛苦的组织环境" },
-      { icon: BarChart3, title: "长期风险分析", description: "如果违背高敏感锚，3-10年后可能面临的职业代价与心理成本" },
+      { icon: BarChart3, title: "长期发展分析", description: "如果违背核心锚，3-10年后可能面临的职业代价与心理成本" },
       { icon: Zap, title: "行动路径建议", description: "可执行的学习方向、转型路径和验证方式" },
     ],
     "zh-TW": [
       { icon: Compass, title: "職業錨雷達圖", description: "8維度標準化得分視覺化，清晰呈現你的職業價值取向分佈" },
-      { icon: Target, title: "高敏感錨識別", description: "識別得分>80的高敏感錨點，明確你的核心職業驅動力" },
+      { icon: Target, title: "核心錨識別", description: "識別得分>80的核心錨點，明確你的核心職業驅動力" },
       { icon: AlertTriangle, title: "衝突錨警示", description: "識別邏輯上互斥卻同時高分的錨點，揭示潛在的內心衝突" },
       { icon: FileText, title: "不適合清單", description: "明確列出你不適合的工作類型和容易痛苦的組織環境" },
-      { icon: BarChart3, title: "長期風險分析", description: "如果違背高敏感錨，3-10年後可能面臨的職業代價與心理成本" },
+      { icon: BarChart3, title: "長期發展分析", description: "如果違背核心錨，3-10年後可能面臨的職業代價與心理成本" },
       { icon: Zap, title: "行動路徑建議", description: "可執行的學習方向、轉型路徑和驗證方式" },
     ],
     "en": [
       { icon: Compass, title: "Career Anchor Radar", description: "Visualized 8-dimension standardized scores showing your career value orientation" },
-      { icon: Target, title: "High-Sensitivity Anchors", description: "Identifies anchors scoring >80, revealing your core career drivers" },
+      { icon: Target, title: "Core Anchors", description: "Identifies anchors scoring >80, revealing your core career drivers" },
       { icon: AlertTriangle, title: "Conflict Anchor Warnings", description: "Identifies logically contradictory high-scoring anchors, revealing inner conflicts" },
       { icon: FileText, title: "Unsuitable Environments", description: "Explicitly lists job types and environments that don't match your anchors" },
-      { icon: BarChart3, title: "Long-term Risk Analysis", description: "Career and psychological costs of ignoring high-sensitivity anchors over 3-10 years" },
+      { icon: BarChart3, title: "Long-term Risk Analysis", description: "Career and psychological costs of ignoring core anchors over 3-10 years" },
       { icon: Zap, title: "Action Path Suggestions", description: "Executable learning directions, transition paths, and validation methods" },
     ],
   };
 
   const heroContent: Record<Language, { title: string[]; subtitle: string; warning: string }> = {
     "zh-CN": {
-      title: ["探索你最值得坚持与发展的", "职涯底层需求"],
-      subtitle: "基于 Edgar Schein 职业锚理论，透过系统化专业测评，帮助你清晰看见自己长期稳定且深层的职业驱动力。\n\n这不只是性格测验，而是一套协助你做出更成熟职涯选择的专业决策工具。\n\n让你的每一次选择，都更靠近真正适合你的未来。",
+      title: ["探索你最值得坚持与发展的", "职涯核心需求"],
+      subtitle: "基于 Edgar Schein 职业锚理论，透过系统化专业测评，帮助你清晰看见自己长期稳定且深层的职业驱动力。这不只是性格测验，而是一套协助你做出更成熟职涯选择的专业决策工具。\n\n让你的每一次选择，都更靠近真正适合你的未来。",
       warning: "请选择真实倾向，而非社会期待。本测评不会迎合你，会明确指出「不适合」的选项，并强调违背核心锚点的长期代价。所有结论基于测评数据与逻辑推导，不使用 MBTI、星座或任何性格标签化语言。",
     },
     "zh-TW": {
-      title: ["探索你最值得堅持與發展的", "職涯底層需求"],
-      subtitle: "基於 Edgar Schein 職業錨理論，透過系統化專業測評，幫助你清晰看見自己長期穩定且深層的職業驅動力。\n\n這不只是性格測驗，而是一套協助你做出更成熟職涯選擇的專業決策工具。\n\n讓你的每一次選擇，都更靠近真正適合你的未來。",
+      title: ["探索你最值得堅持與發展的", "職涯核心需求"],
+      subtitle: "基於 Edgar Schein 職業錨理論，透過系統化專業測評，幫助你清晰看見自己長期穩定且深層的職業驅動力。這不只是性格測驗，而是一套協助你做出更成熟職涯選擇的專業決策工具。\n\n讓你的每一次選擇，都更靠近真正適合你的未來。",
       warning: "請選擇真實傾向，而非社會期待。本測評不會迎合你，會明確指出「不適合」的選項，並強調違背核心錨點的長期代價。所有結論基於測評數據與邏輯推導，不使用 MBTI、星座或任何性格標籤化語言。",
     },
     "en": {
       title: ["Explore the Career Needs", "Most Worth Pursuing & Developing"],
-      subtitle: "Based on Edgar Schein's Career Anchor Theory, this systematic professional assessment helps you clearly see your long-term, stable, and deep career drivers.\n\nThis is more than a personality test—it's a professional decision-making tool to help you make more mature career choices.\n\nLet every choice you make bring you closer to the future that truly fits you.",
+      subtitle: "Based on Edgar Schein's Career Anchor Theory, this systematic professional assessment helps you clearly see your long-term, stable, and deep career drivers. This is more than a personality test—it's a professional decision-making tool to help you make more mature career choices.\n\nLet every choice you make bring you closer to the future that truly fits you.",
       warning: "Please choose your true preferences, not social expectations. This assessment won't pander to you—it will clearly point out 'unsuitable' options and emphasize the long-term costs of going against your core anchors.",
     },
   };
@@ -290,7 +438,7 @@ export default function HomePage() {
           {/* Right Side Actions */}
           <div className="flex items-center gap-4">
             <button
-              onClick={handleStartAssessment}
+              onClick={scrollToAssessmentSelect}
               className="px-5 py-2 text-sm font-semibold rounded-lg text-white transition-all hover:shadow-lg"
               style={{ backgroundColor: "#1a3a5c" }}
             >
@@ -348,20 +496,24 @@ export default function HomePage() {
                         >
                           {language === "en" ? "Messages" : language === "zh-TW" ? "訊息" : "消息"}
                         </button>
-                        <button
-                          onClick={() => { navigate("/cp-wallet"); setShowRoleDropdown(false); }}
-                          className="w-full text-left px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors flex items-center gap-2"
-                        >
-                          <Wallet className="w-3.5 h-3.5" />
-                          {language === "en" ? "CP Wallet" : language === "zh-TW" ? "CP 錢包" : "CP 钱包"}
-                        </button>
-                        <button
-                          onClick={() => { navigate("/referral"); setShowRoleDropdown(false); }}
-                          className="w-full text-left px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors flex items-center gap-2"
-                        >
-                          <Gift className="w-3.5 h-3.5" />
-                          {language === "en" ? "Referral Rewards" : language === "zh-TW" ? "推薦獎勵" : "推荐奖励"}
-                        </button>
+                        {isCpPointsEnabled && (
+                          <button
+                            onClick={() => { navigate("/cp-wallet"); setShowRoleDropdown(false); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors flex items-center gap-2"
+                          >
+                            <Wallet className="w-3.5 h-3.5" />
+                            {language === "en" ? "CP Wallet" : language === "zh-TW" ? "CP 錢包" : "CP 钱包"}
+                          </button>
+                        )}
+                        {isCpPointsEnabled && (
+                          <button
+                            onClick={() => { navigate("/referral"); setShowRoleDropdown(false); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors flex items-center gap-2"
+                          >
+                            <Gift className="w-3.5 h-3.5" />
+                            {language === "en" ? "Referral Rewards" : language === "zh-TW" ? "推薦獎勵" : "推荐奖励"}
+                          </button>
+                        )}
                         {(() => {
                           if (!profile) return null;
                           const consoleInfo = findConsoleRoleFromProfile(profile);
@@ -480,7 +632,6 @@ export default function HomePage() {
           </div>
         </div>
       </nav>
-
       {/* Pending Assignment Banner */}
       {user && pendingAssignments && pendingAssignments.length > 0 && (
         <div className="pt-20">
@@ -533,58 +684,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* CP Wallet Summary (logged-in users) */}
-      {user && cpWalletData.wallet && (
-        <div className={cn("px-6", pendingAssignments && pendingAssignments.length > 0 ? "pt-4" : "pt-20")}>
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="max-w-4xl mx-auto"
-          >
-            <CpWalletCard
-              wallet={cpWalletData.wallet}
-              membership={cpWalletData.membership}
-              nextTier={cpWalletData.nextTier}
-              tierProgressPercent={cpWalletData.tierProgressPercent}
-              expiringEntries={cpWalletData.expiringEntries}
-              totalExpiringCp={cpWalletData.totalExpiringCp}
-              onViewDetails={() => navigate("/cp-wallet")}
-            />
-            {/* CP Journey Quick Actions */}
-            <div className="flex gap-3 mt-3">
-              <button
-                onClick={() => navigate("/recharge")}
-                className="flex-1 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 text-sm font-medium text-amber-800 hover:shadow-md hover:border-amber-300 transition-all group"
-              >
-                <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center group-hover:bg-amber-200 transition-colors">
-                  <Sparkles className="w-4 h-4 text-amber-600" />
-                </div>
-                {language === "en" ? "Recharge CP" : language === "zh-TW" ? "充值 CP" : "充值 CP"}
-              </button>
-              <button
-                onClick={() => navigate("/referral")}
-                className="flex-1 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/60 text-sm font-medium text-emerald-800 hover:shadow-md hover:border-emerald-300 transition-all group"
-              >
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
-                  <Gift className="w-4 h-4 text-emerald-600" />
-                </div>
-                {language === "en" ? "Referral Rewards" : language === "zh-TW" ? "推薦獎勵" : "推荐奖励"}
-              </button>
-              <button
-                onClick={() => navigate("/my-reports")}
-                className="flex-1 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200/60 text-sm font-medium text-sky-800 hover:shadow-md hover:border-sky-300 transition-all group"
-              >
-                <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center group-hover:bg-sky-200 transition-colors">
-                  <FileText className="w-4 h-4 text-sky-600" />
-                </div>
-                {language === "en" ? "My Reports" : language === "zh-TW" ? "我的報告" : "我的报告"}
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-6 relative overflow-hidden">
         {/* Background Elements */}
@@ -604,10 +703,18 @@ export default function HomePage() {
                 Career Anchors Assessment
               </div>
 
-              <h1 className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold leading-tight mb-8 text-slate-900">
+              <h1
+                className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold leading-tight mb-8 text-slate-900"
+                style={{
+                  fontSize: "40px",
+                  fontStyle: "normal",
+                  fontWeight: "700",
+                  textAlign: "start",
+                  lineHeight: "1.4"
+                }}>
                 {heroContent[language].title[0]}
                 <br />
-                <span className="bg-gradient-to-r from-sky-600 to-blue-600 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-sky-600 to-blue-600 bg-clip-text text-transparent" style={{ fontSize: "56px" }}>
                   {heroContent[language].title[1]}
                 </span>
               </h1>
@@ -620,7 +727,7 @@ export default function HomePage() {
 
               <div className="flex flex-wrap gap-4 mb-10">
                 <button
-                  onClick={handleStartAssessment}
+                  onClick={scrollToAssessmentSelect}
                   className="inline-flex items-center gap-3 px-8 py-4 font-semibold rounded-xl text-white transition-all hover:shadow-xl hover:scale-[1.02] group"
                   style={{ backgroundColor: "#1a3a5c" }}
                 >
@@ -672,7 +779,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
       {/* Warning Notice */}
       <section className="py-12 px-6">
         <div className="max-w-4xl mx-auto">
@@ -698,7 +804,6 @@ export default function HomePage() {
           </motion.div>
         </div>
       </section>
-
       {/* 8 Career Anchors */}
       <section className="py-24 px-6 bg-white">
         <div className="max-w-6xl mx-auto">
@@ -750,9 +855,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
       {/* Dual-Core Assessment: Career Anchors + Ideal Life Card */}
-      <section className="py-24 px-6 bg-white">
+      <section id="assessment-select" className="py-24 px-6 bg-white scroll-mt-20">
         <div className="max-w-6xl mx-auto">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -805,13 +909,33 @@ export default function HomePage() {
                       ? "基於 Edgar Schein 理論，系統化評估8大職業錨維度，識別你不可妥協的職業核心驅動力——那些在職涯中最不該犧牲的價值。"
                       : "基于 Edgar Schein 理论，系统化评估8大职业锚维度，识别你不可妥协的职业核心驱动力——那些在职涯中最不该牺牲的价值。"}
                 </p>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mb-6">
                   {["TF", "GM", "AU", "SE", "EC", "SV", "CH", "LS"].map((key) => (
                     <span key={key} className="px-3 py-1 rounded-full bg-white/80 border border-sky-200 text-xs font-medium text-slate-700">
                       {t(`assessment.dimensions.${key}`)}
                     </span>
                   ))}
                 </div>
+                <button
+                  onClick={() => handleStartSpecificAssessment('career_anchor')}
+                  disabled={!isCareerAnchorEnabled}
+                  className={cn(
+                    "inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all group",
+                    isCareerAnchorEnabled
+                      ? "text-white hover:shadow-lg hover:scale-[1.02]"
+                      : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                  )}
+                  style={isCareerAnchorEnabled ? { backgroundColor: "#1a3a5c" } : {}}
+                >
+                  {!isCareerAnchorEnabled && <Lock className="w-3.5 h-3.5" />}
+                  {language === "en" ? "Start Assessment" : language === "zh-TW" ? "開始測評" : "开始测评"}
+                  {isCareerAnchorEnabled && <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />}
+                </button>
+                {!isCareerAnchorEnabled && (
+                  <p className="text-xs text-slate-400 mt-2">
+                    {language === "en" ? "Not available for your organization" : language === "zh-TW" ? "您的機構未授權此測評" : "您的机构未授权此测评"}
+                  </p>
+                )}
               </div>
             </motion.div>
 
@@ -832,7 +956,7 @@ export default function HomePage() {
                   <div>
                     <div className="text-xs font-semibold text-rose-500 uppercase tracking-wider">Core 2</div>
                     <h3 className="text-xl font-bold text-slate-900">
-                      {language === "en" ? "Ideal Life Card" : language === "zh-TW" ? "理想人生卡" : "理想人生卡"}
+                      {language === "en" ? "Espresso Card" : language === "zh-TW" ? "理想人生卡" : "理想人生卡"}
                     </h3>
                   </div>
                 </div>
@@ -843,7 +967,7 @@ export default function HomePage() {
                       ? "超越職業錨，探索更深層的人生理想。透過精選價值卡片，發現在職業、關係、成長和幸福感之間，什麼對你真正重要——構建整合的人生-職涯指南針。"
                       : "超越职业锚，探索更深层的人生理想。通过精选价值卡片，发现在职业、关系、成长和幸福感之间，什么对你真正重要——构建整合的人生-职涯指南针。"}
                 </p>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mb-6">
                   {(language === "en" 
                     ? ["Life Purpose", "Self-Growth", "Relationships", "Well-being", "Social Impact", "Freedom", "Legacy", "Balance"]
                     : language === "zh-TW"
@@ -855,6 +979,26 @@ export default function HomePage() {
                     </span>
                   ))}
                 </div>
+                <button
+                  onClick={() => handleStartSpecificAssessment('ideal_card')}
+                  disabled={!isIdealCardEnabled}
+                  className={cn(
+                    "inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all group",
+                    isIdealCardEnabled
+                      ? "text-white hover:shadow-lg hover:scale-[1.02]"
+                      : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                  )}
+                  style={isIdealCardEnabled ? { backgroundColor: "#e74c6f" } : {}}
+                >
+                  {!isIdealCardEnabled && <Lock className="w-3.5 h-3.5" />}
+                  {language === "en" ? "Start Assessment" : language === "zh-TW" ? "開始測評" : "开始测评"}
+                  {isIdealCardEnabled && <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />}
+                </button>
+                {!isIdealCardEnabled && (
+                  <p className="text-xs text-slate-400 mt-2">
+                    {language === "en" ? "Not available for your organization" : language === "zh-TW" ? "您的機構未授權此測評" : "您的机构未授权此测评"}
+                  </p>
+                )}
               </div>
             </motion.div>
           </div>
@@ -882,17 +1026,35 @@ export default function HomePage() {
                   ? "當職業錨遇上人生價值觀，你的決策才能真正一致。"
                   : "当职业锚遇上人生价值观，你的决策才能真正一致。"}
             </p>
-            <p className="text-white/60 text-sm mt-2">
+            <p className="text-white/60 text-sm mt-2 mb-5">
               {language === "en" 
-                ? "Choose the Combined Assessment to get all three reports: Career Anchor, Ideal Life Card, and Fusion Analysis."
+                ? "Choose the Combined Assessment to get all three reports: Career Anchor, Espresso Card, and Fusion Analysis."
                 : language === "zh-TW"
-                  ? "選擇「聯合測評」即可獲得三份完整報告：職業錨、理想人生卡、融合分析。"
-                  : "选择“联合测评”即可获得三份完整报告：职业锚、理想人生卡、融合分析。"}
+                  ? "選擇「整合測評」即可獲得三份完整報告：職業錨、理想人生卡、整合分析。"
+                  : "选择“整合测评”即可获得三份完整报告：职业锚、理想人生卡、整合分析。"}
             </p>
+            <button
+              onClick={() => handleStartSpecificAssessment('combined')}
+              disabled={!isCombinedEnabled}
+              className={cn(
+                "inline-flex items-center gap-2 px-8 py-3 rounded-xl text-sm font-semibold transition-all group",
+                isCombinedEnabled
+                  ? "bg-gradient-to-r from-sky-400 to-rose-400 text-white hover:shadow-lg hover:scale-[1.02]"
+                  : "bg-slate-600 text-slate-400 cursor-not-allowed"
+              )}
+            >
+              {!isCombinedEnabled && <Lock className="w-3.5 h-3.5" />}
+              {language === "en" ? "Start Integration Assessment" : language === "zh-TW" ? "開始整合測評" : "开始整合测评"}
+              {isCombinedEnabled && <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />}
+            </button>
+            {!isCombinedEnabled && (
+              <p className="text-white/40 text-xs mt-2">
+                {language === "en" ? "Not available for your organization" : language === "zh-TW" ? "您的機構未授權此測評" : "您的机构未授权此测评"}
+              </p>
+            )}
           </motion.div>
         </div>
       </section>
-
       {/* Outputs */}
       <section className="py-24 px-6 bg-gradient-to-br from-slate-50 to-sky-50">
         <div className="max-w-5xl mx-auto">
@@ -936,7 +1098,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
       {/* Bottom CTA */}
       <section 
         className="py-24 px-6 relative overflow-hidden"
@@ -965,7 +1126,7 @@ export default function HomePage() {
                   : "完成测评，避免在错误的职业道路上浪费多年时光。"}
             </p>
             <button
-              onClick={handleStartAssessment}
+              onClick={scrollToAssessmentSelect}
               className="inline-flex items-center gap-3 px-10 py-5 font-semibold rounded-xl transition-all group shadow-2xl hover:shadow-sky-500/25 hover:scale-[1.02]"
               style={{ backgroundColor: "#3498db", color: "white" }}
             >
@@ -975,7 +1136,6 @@ export default function HomePage() {
           </motion.div>
         </div>
       </section>
-
       {/* Footer */}
       <footer className="py-8 px-6 bg-white border-t border-slate-200">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
@@ -992,7 +1152,6 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
-
       {/* Career Stage Modal */}
       <AnimatePresence>
         {showCareerStage && (
@@ -1001,7 +1160,7 @@ export default function HomePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-6"
-            onClick={() => setShowCareerStage(false)}
+            onClick={() => { setShowCareerStage(false); setSelectedEntry(null); }}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -1047,18 +1206,18 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <label className={cn(
-                      "flex items-center gap-1 px-2.5 py-2.5 rounded-lg border cursor-pointer transition-all text-xs font-medium whitespace-nowrap",
-                      isExecutive ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-500 hover:border-slate-300"
+                      "flex items-center gap-1 px-2.5 py-2.5 rounded-lg border transition-all text-xs font-medium whitespace-nowrap",
+                      "border-slate-200 text-slate-300 cursor-not-allowed opacity-50"
                     )}>
-                      <input type="checkbox" checked={isExecutive} onChange={(event) => setIsExecutive(event.target.checked)} className="sr-only" />
+                      <input type="checkbox" checked={false} disabled className="sr-only" />
                       <Crown className="w-3.5 h-3.5" />
                       {executiveLabel}
                     </label>
                     <label className={cn(
-                      "flex items-center gap-1 px-2.5 py-2.5 rounded-lg border cursor-pointer transition-all text-xs font-medium whitespace-nowrap",
-                      isEntrepreneur ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500 hover:border-slate-300"
+                      "flex items-center gap-1 px-2.5 py-2.5 rounded-lg border transition-all text-xs font-medium whitespace-nowrap",
+                      "border-slate-200 text-slate-300 cursor-not-allowed opacity-50"
                     )}>
-                      <input type="checkbox" checked={isEntrepreneur} onChange={(event) => setIsEntrepreneur(event.target.checked)} className="sr-only" />
+                      <input type="checkbox" checked={false} disabled className="sr-only" />
                       <Zap className="w-3.5 h-3.5" />
                       {entrepreneurLabel}
                     </label>
@@ -1077,123 +1236,172 @@ export default function HomePage() {
               {/* Divider */}
               <div className="border-t border-slate-200 my-5" />
 
-              {/* Assessment Entry Label */}
-              <div className="mb-3">
-                <p className="text-sm font-semibold text-slate-700 mb-1">
-                  {language === "en" ? "Select Assessment Type" : language === "zh-TW" ? "選擇測評類型" : "选择测评类型"}
-                </p>
-                <p className="text-xs text-slate-400">
-                  {language === "en" ? "Choose one entry point below" : language === "zh-TW" ? "請選擇以下一個入口" : "请选择以下一个入口"}
-                </p>
-              </div>
+              {/* Assessment Type Selection — hidden when entering from a specific assessment button */}
+              {!selectedEntry && (
+                <>
+                  <div className="mb-3">
+                    <p className="text-sm font-semibold text-slate-700 mb-1">
+                      {language === "en" ? "Select Assessment Type" : language === "zh-TW" ? "選擇測評類型" : "选择测评类型"}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {language === "en" ? "Choose one entry point below" : language === "zh-TW" ? "請選擇以下一個入口" : "请选择以下一个入口"}
+                    </p>
+                  </div>
 
-              {/* Entry Card 1: Ideal Life Card */}
-              <div className="mb-2.5">
-                <button
-                  onClick={() => setSelectedEntry(selectedEntry === 'ideal_card' ? null : 'ideal_card')}
-                  className={cn(
-                    "w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left",
-                    selectedEntry === 'ideal_card'
-                      ? "border-rose-400 bg-rose-50 shadow-sm"
-                      : "border-slate-200 hover:border-rose-300 hover:bg-slate-50"
-                  )}
-                >
-                  <div
-                    className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
-                    style={{ backgroundColor: selectedEntry === 'ideal_card' ? "#e74c6f" : "#cbd5e1", color: "white" }}
-                  >
-                    <Heart className="w-5 h-5" />
+                  {/* Entry Card 1: Ideal Life Card */}
+                  <div className="mb-2.5">
+                    <button
+                      onClick={() => isIdealCardEnabled && setSelectedEntry('ideal_card')}
+                      disabled={!isIdealCardEnabled}
+                      className={cn(
+                        "w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left",
+                        !isIdealCardEnabled
+                          ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
+                          : selectedEntry === 'ideal_card'
+                            ? "border-rose-400 bg-rose-50 shadow-sm"
+                            : "border-slate-200 hover:border-rose-300 hover:bg-slate-50"
+                      )}
+                    >
+                      <div
+                        className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
+                        style={{ backgroundColor: !isIdealCardEnabled ? "#94a3b8" : selectedEntry === 'ideal_card' ? "#e74c6f" : "#cbd5e1", color: "white" }}
+                      >
+                        {!isIdealCardEnabled ? <Lock className="w-5 h-5" /> : <Heart className="w-5 h-5" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className={cn("font-semibold text-sm", !isIdealCardEnabled ? "text-slate-400" : "text-slate-800")}>
+                          {language === "en" ? "Espresso Card" : language === "zh-TW" ? "理想人生卡測評" : "理想人生卡测评"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {!isIdealCardEnabled
+                            ? (language === "en" ? "Not authorized" : language === "zh-TW" ? "未授權" : "未授权")
+                            : (language === "en" ? "Discover your core life values (1 report)" : language === "zh-TW" ? "探索人生核心價值觀（1份報告）" : "探索人生核心价值观（1份报告）")
+                          }
+                        </div>
+                      </div>
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all",
+                        selectedEntry === 'ideal_card' ? "border-rose-400 bg-rose-400" : "border-slate-300"
+                      )}>
+                        {selectedEntry === 'ideal_card' && <div className="w-2 h-2 rounded-full bg-white" />}
+                      </div>
+                    </button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm text-slate-800">
-                      {language === "en" ? "Ideal Life Card" : language === "zh-TW" ? "理想人生卡測評" : "理想人生卡测评"}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {language === "en" ? "Discover your core life values (1 report)" : language === "zh-TW" ? "探索人生核心價值觀（1份報告）" : "探索人生核心价值观（1份报告）"}
-                    </div>
-                  </div>
-                  <div className={cn(
-                    "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all",
-                    selectedEntry === 'ideal_card' ? "border-rose-400 bg-rose-400" : "border-slate-300"
-                  )}>
-                    {selectedEntry === 'ideal_card' && <div className="w-2 h-2 rounded-full bg-white" />}
-                  </div>
-                </button>
-              </div>
 
-              {/* Entry Card 2: Career Anchor */}
-              <div className="mb-2.5">
-                <button
-                  onClick={() => setSelectedEntry(selectedEntry === 'career_anchor' ? null : 'career_anchor')}
-                  className={cn(
-                    "w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left",
-                    selectedEntry === 'career_anchor'
-                      ? "border-sky-500 bg-sky-50 shadow-sm"
-                      : "border-slate-200 hover:border-sky-300 hover:bg-slate-50"
-                  )}
-                >
-                  <div
-                    className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
-                    style={{ backgroundColor: selectedEntry === 'career_anchor' ? "#3498db" : "#cbd5e1", color: "white" }}
-                  >
-                    <Compass className="w-5 h-5" />
+                  {/* Entry Card 2: Career Anchor */}
+                  <div className="mb-2.5">
+                    <button
+                      onClick={() => isCareerAnchorEnabled && setSelectedEntry('career_anchor')}
+                      disabled={!isCareerAnchorEnabled}
+                      className={cn(
+                        "w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left",
+                        !isCareerAnchorEnabled
+                          ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
+                          : selectedEntry === 'career_anchor'
+                            ? "border-sky-500 bg-sky-50 shadow-sm"
+                            : "border-slate-200 hover:border-sky-300 hover:bg-slate-50"
+                      )}
+                    >
+                      <div
+                        className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
+                        style={{ backgroundColor: !isCareerAnchorEnabled ? "#94a3b8" : selectedEntry === 'career_anchor' ? "#3498db" : "#cbd5e1", color: "white" }}
+                      >
+                        {!isCareerAnchorEnabled ? <Lock className="w-5 h-5" /> : <Compass className="w-5 h-5" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className={cn("font-semibold text-sm", !isCareerAnchorEnabled ? "text-slate-400" : "text-slate-800")}>
+                          {language === "en" ? "Career Anchor Assessment" : language === "zh-TW" ? "職業錨測評" : "职业锚测评"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {!isCareerAnchorEnabled
+                            ? (language === "en" ? "Not authorized" : language === "zh-TW" ? "未授權" : "未授权")
+                            : (language === "en" ? "Identify non-negotiable career drivers (1 report)" : language === "zh-TW" ? "識別不可妥協的職業驅動力（1份報告）" : "识别不可妥协的职业驱动力（1份报告）")
+                          }
+                        </div>
+                      </div>
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all",
+                        selectedEntry === 'career_anchor' ? "border-sky-500 bg-sky-500" : "border-slate-300"
+                      )}>
+                        {selectedEntry === 'career_anchor' && <div className="w-2 h-2 rounded-full bg-white" />}
+                      </div>
+                    </button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm text-slate-800">
-                      {language === "en" ? "Career Anchor Assessment" : language === "zh-TW" ? "職業錨測評" : "职业锚测评"}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {language === "en" ? "Identify non-negotiable career drivers (1 report)" : language === "zh-TW" ? "識別不可妥協的職業驅動力（1份報告）" : "识别不可妥协的职业驱动力（1份报告）"}
-                    </div>
-                  </div>
-                  <div className={cn(
-                    "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all",
-                    selectedEntry === 'career_anchor' ? "border-sky-500 bg-sky-500" : "border-slate-300"
-                  )}>
-                    {selectedEntry === 'career_anchor' && <div className="w-2 h-2 rounded-full bg-white" />}
-                  </div>
-                </button>
-              </div>
 
-              {/* Entry Card 3: Combined Assessment */}
-              <div className="mb-4">
-                <button
-                  onClick={() => setSelectedEntry(selectedEntry === 'combined' ? null : 'combined')}
-                  className={cn(
-                    "w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left relative overflow-hidden",
-                    selectedEntry === 'combined'
-                      ? "border-violet-500 bg-violet-50 shadow-sm"
-                      : "border-slate-200 hover:border-violet-300 hover:bg-slate-50"
+                  {/* Entry Card 3: Combined Assessment */}
+                  <div className="mb-4">
+                    <button
+                      onClick={() => isCombinedEnabled && setSelectedEntry('combined')}
+                      disabled={!isCombinedEnabled}
+                      className={cn(
+                        "w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left relative overflow-hidden",
+                        !isCombinedEnabled
+                          ? "border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed"
+                          : selectedEntry === 'combined'
+                            ? "border-violet-500 bg-violet-50 shadow-sm"
+                            : "border-slate-200 hover:border-violet-300 hover:bg-slate-50"
+                      )}
+                    >
+                      {isCombinedEnabled && (
+                        <div className="absolute top-0 right-0">
+                          <div className="px-2 py-0.5 text-[10px] font-bold text-white rounded-bl-lg" style={{ backgroundColor: "#7c3aed" }}>
+                            {language === "en" ? "RECOMMENDED" : language === "zh-TW" ? "推薦" : "推荐"}
+                          </div>
+                        </div>
+                      )}
+                      <div
+                        className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
+                        style={{ backgroundColor: !isCombinedEnabled ? "#94a3b8" : selectedEntry === 'combined' ? "#7c3aed" : "#cbd5e1", color: "white" }}
+                      >
+                        {!isCombinedEnabled ? <Lock className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className={cn("font-semibold text-sm", !isCombinedEnabled ? "text-slate-400" : "text-slate-800")}>
+                          {language === "en" ? "Integration Assessment" : language === "zh-TW" ? "整合測評" : "整合测评"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {!isCombinedEnabled
+                            ? (language === "en" ? "Not authorized" : language === "zh-TW" ? "未授權" : "未授权")
+                            : (language === "en" ? "Anchor + Espresso Card + Integration Analysis (3 reports)" : language === "zh-TW" ? "職業錨＋理想人生卡＋整合分析（3份報告）" : "职业锚＋理想人生卡＋整合分析（3份报告）")
+                          }
+                        </div>
+                      </div>
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all",
+                        selectedEntry === 'combined' ? "border-violet-500 bg-violet-500" : "border-slate-300"
+                      )}>
+                        {selectedEntry === 'combined' && <div className="w-2 h-2 rounded-full bg-white" />}
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* No assessments notice */}
+                  {!isCareerAnchorEnabled && !isIdealCardEnabled && !isCombinedEnabled && (
+                    <div className="py-8 text-center">
+                      <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto mb-3" />
+                      <p className="text-sm text-slate-500">
+                        {language === "en" ? "No assessments available for your organization. Please contact your administrator." : language === "zh-TW" ? "您的機構目前沒有可用的測評，請聯繫管理員。" : "您的机构目前没有可用的测评，请联系管理员。"}
+                      </p>
+                    </div>
                   )}
-                >
-                  {/* Recommended badge */}
-                  <div className="absolute top-0 right-0">
-                    <div className="px-2 py-0.5 text-[10px] font-bold text-white rounded-bl-lg" style={{ backgroundColor: "#7c3aed" }}>
-                      {language === "en" ? "RECOMMENDED" : language === "zh-TW" ? "推薦" : "推荐"}
-                    </div>
-                  </div>
-                  <div
-                    className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
-                    style={{ backgroundColor: selectedEntry === 'combined' ? "#7c3aed" : "#cbd5e1", color: "white" }}
-                  >
-                    <Layers className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm text-slate-800">
-                      {language === "en" ? "Combined Assessment" : language === "zh-TW" ? "聯合測評" : "联合测评"}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {language === "en" ? "Anchor + Life Card + Fusion Analysis (3 reports)" : language === "zh-TW" ? "職業錨＋理想人生卡＋融合分析（3份報告）" : "职业锚＋理想人生卡＋融合分析（3份报告）"}
-                    </div>
-                  </div>
-                  <div className={cn(
-                    "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all",
-                    selectedEntry === 'combined' ? "border-violet-500 bg-violet-500" : "border-slate-300"
-                  )}>
-                    {selectedEntry === 'combined' && <div className="w-2 h-2 rounded-full bg-white" />}
-                  </div>
-                </button>
-              </div>
+                </>              
+              )}
+              {/* When entering from a specific assessment button, show the selected type as a badge */}
+              {selectedEntry && (
+                <div className="mb-4 p-3.5 rounded-xl bg-sky-50 border border-sky-200">
+                  <p className="text-xs text-slate-400 mb-1">
+                    {language === "en" ? "Assessment Type" : language === "zh-TW" ? "測評類型" : "测评类型"}
+                  </p>
+                  <p className="text-sm font-semibold text-slate-800">
+                    {selectedEntry === 'career_anchor' 
+                      ? (language === "en" ? "Career Anchor Assessment" : language === "zh-TW" ? "職業錨測評" : "职业锚测评")
+                      : selectedEntry === 'ideal_card'
+                        ? (language === "en" ? "Espresso Card" : language === "zh-TW" ? "理想人生卡測評" : "理想人生卡测评")
+                        : (language === "en" ? "Integration Assessment" : language === "zh-TW" ? "整合測評" : "整合测评")
+                    }
+                  </p>
+                </div>
+              )}
 
               </div>{/* End Scrollable Content */}
 
@@ -1218,7 +1426,6 @@ export default function HomePage() {
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* CP Purchase Gate Modal */}
       <CpPurchaseModal
         isOpen={cpPurchase.showPurchaseModal}
@@ -1231,6 +1438,68 @@ export default function HomePage() {
         onConfirm={cpPurchase.confirmPurchase}
         onCancel={cpPurchase.cancelPurchase}
       />
+
+      {/* Verification Code Dialog — for org users with CP disabled */}
+      <AnimatePresence>
+        {showVerifyCode && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center"
+            onClick={() => { setShowVerifyCode(false); setVerifyCode(""); }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md bg-white rounded-2xl p-8 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-6">
+                <div className="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ backgroundColor: "hsl(75, 55%, 90%)" }}>
+                  <Lock className="w-7 h-7" style={{ color: "hsl(228, 51%, 23%)" }} />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground">
+                  {language === "en" ? "Enter Authorization Code" : language === "zh-TW" ? "\u8F38\u5165\u6388\u6B0A\u9A57\u8B49\u78BC" : "\u8F93\u5165\u6388\u6743\u9A8C\u8BC1\u7801"}
+                </h3>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {language === "en" ? "Please enter the code provided by your organization admin." : language === "zh-TW" ? "\u8ACB\u8F38\u5165\u7D44\u7E54\u7BA1\u7406\u54E1\u63D0\u4F9B\u7684\u6388\u6B0A\u78BC\u3002" : "\u8BF7\u8F93\u5165\u7EC4\u7EC7\u7BA1\u7406\u5458\u63D0\u4F9B\u7684\u6388\u6743\u7801\u3002"}
+                </p>
+              </div>
+              <input
+                type="text"
+                value={verifyCode}
+                onChange={(e) => setVerifyCode(e.target.value.toUpperCase())}
+                placeholder={language === "en" ? "Authorization code" : language === "zh-TW" ? "\u6388\u6B0A\u78BC" : "\u6388\u6743\u7801"}
+                className="w-full px-4 py-3 rounded-xl border-2 border-border text-center text-xl font-mono tracking-[0.3em] bg-card text-foreground outline-none focus:border-primary mb-6"
+                maxLength={20}
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && verifyCode.trim() && handleVerifyCode()}
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowVerifyCode(false); setVerifyCode(""); }}
+                  className="flex-1 py-3 rounded-xl border border-border text-foreground font-medium transition-all hover:bg-muted"
+                >
+                  {language === "en" ? "Cancel" : language === "zh-TW" ? "\u53D6\u6D88" : "\u53D6\u6D88"}
+                </button>
+                <button
+                  onClick={handleVerifyCode}
+                  disabled={!verifyCode.trim() || verifyLoading}
+                  className="flex-1 py-3 rounded-xl text-white font-medium transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: "hsl(228, 51%, 23%)" }}
+                >
+                  {verifyLoading
+                    ? (language === "en" ? "Verifying..." : language === "zh-TW" ? "\u9A57\u8B49\u4E2D..." : "\u9A8C\u8BC1\u4E2D...")
+                    : (language === "en" ? "Confirm" : language === "zh-TW" ? "\u78BA\u8A8D" : "\u786E\u8BA4")
+                  }
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

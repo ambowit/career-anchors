@@ -63,8 +63,8 @@ function useText() {
   const { language } = useTranslation();
   const textMap: Record<Language, Record<string, string>> = {
     "zh-TW": {
-      pageTitle: "融合規則配置器",
-      pageDesc: "管理前 3 名卡片的組合解讀文本，為用戶生成融合分析報告",
+      pageTitle: "整合規則配置器",
+      pageDesc: "管理前 3 名卡片的組合解讀文本，為用戶生成整合分析報告",
       addRule: "新增規則",
       totalRules: "規則總數",
       activeRules: "已啟用",
@@ -82,7 +82,7 @@ function useText() {
       createRule: "新增規則",
       save: "儲存",
       cancel: "取消",
-      deleteConfirm: "確定要刪除此融合規則？",
+      deleteConfirm: "確定要刪除此整合規則？",
       deleteSuccess: "規則已刪除",
       saveSuccess: "規則已儲存",
       toggleSuccess: "狀態已更新",
@@ -96,8 +96,8 @@ function useText() {
       rank: "名次",
     },
     "zh-CN": {
-      pageTitle: "融合规则配置器",
-      pageDesc: "管理前 3 名卡片的组合解读文本，为用户生成融合分析报告",
+      pageTitle: "整合规则配置器",
+      pageDesc: "管理前 3 名卡片的组合解读文本，为用户生成整合分析报告",
       addRule: "新增规则",
       totalRules: "规则总数",
       activeRules: "已启用",
@@ -115,7 +115,7 @@ function useText() {
       createRule: "新增规则",
       save: "保存",
       cancel: "取消",
-      deleteConfirm: "确定要删除此融合规则？",
+      deleteConfirm: "确定要删除此整合规则？",
       deleteSuccess: "规则已删除",
       saveSuccess: "规则已保存",
       toggleSuccess: "状态已更新",
@@ -157,7 +157,7 @@ function useText() {
       version: "Version",
       duplicateWarning: "A rule for this card combination already exists",
       sameCardWarning: "All three cards must be different",
-      noCards: "Please add cards in Life Card Management first",
+      noCards: "Please add cards in Espresso Card Management first",
       combination: "Combination",
       rank: "Rank",
     },
@@ -772,8 +772,8 @@ export default function FusionRulesPage() {
                   : language === "en"
                     ? "No fusion rules yet. Click 'Add Rule' to create one."
                     : language === "zh-TW"
-                      ? "尚未建立融合規則，點擊「新增規則」開始"
-                      : "尚未建立融合规则，点击「新增规则」开始"}
+                      ? "尚未建立整合規則，點擊「新增規則」開始"
+                      : "尚未建立整合规则，点击「新增规则」开始"}
               </p>
             </div>
           )}

@@ -9,6 +9,7 @@ import {
   useClearAssessmentProgress 
 } from "@/hooks/useAssessmentProgress";
 import { useSaveAssessmentResult } from "@/hooks/useAssessmentResults";
+import { useCompleteAssignment } from "@/hooks/useMyAssignments";
 import { useAuth } from "@/hooks/useAuth";
 import { useTestAuth } from "@/hooks/useTestAuth";
 import { useTranslation } from "@/hooks/useLanguage";
@@ -40,17 +41,30 @@ export default function MobileAssessmentPage() {
   const { user } = useAuth();
   const { isTestLoggedIn } = useTestAuth();
   const saveResultMutation = useSaveAssessmentResult();
+  const completeAssignmentMutation = useCompleteAssignment();
   const saveProgressMutation = useSaveAssessmentProgress();
   const clearProgressMutation = useClearAssessmentProgress();
   const { data: savedProgress, isLoading: isLoadingProgress } = useAssessmentProgress();
   
   const startTimeRef = useRef<number>(Date.now());
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const hasCheckedProgressRef = useRef(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [showIntro, setShowIntro] = useState(true);
   const lastSavedRef = useRef<string>("");
+  // Stable refs — updated every render, read inside effects to avoid stale closures
+  const userRef = useRef(user);
+  userRef.current = user;
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const languageRef = useRef(language);
+  languageRef.current = language;
+  const saveProgressRef = useRef(saveProgressMutation);
+  saveProgressRef.current = saveProgressMutation;
+  const clearProgressRef = useRef(clearProgressMutation);
+  clearProgressRef.current = clearProgressMutation;
   
   const isLoggedIn = !!user || isTestLoggedIn;
 
@@ -67,8 +81,13 @@ export default function MobileAssessmentPage() {
     calculateResults,
     getDimensionName,
     getQuestionOrder,
+    restoreProgress,
     assessmentMode,
   } = useAssessment();
+
+  // Ref guarantees the completion effect always reads the latest answers
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
 
   // Question type labels
   const questionTypeLabels = {
@@ -91,41 +110,57 @@ export default function MobileAssessmentPage() {
   // Check for saved progress
   useEffect(() => {
     if (hasCheckedProgressRef.current || answers.length > 0) return;
+    if (isLoadingProgress) return;
     
-    if (!isLoadingProgress && user && savedProgress) {
+    if (user && savedProgress) {
       hasCheckedProgressRef.current = true;
       if (savedProgress.answers.length >= 3) {
         setShowResumeDialog(true);
         setShowIntro(false);
       } else if (savedProgress.answers.length > 0) {
-        clearProgressMutation.mutate();
+        clearProgressRef.current.mutate();
       }
-    } else if (!isLoadingProgress && !user) {
+    } else {
+      // No progress found or not logged in — mark as checked
       hasCheckedProgressRef.current = true;
     }
-  }, [isLoadingProgress, savedProgress, user, answers.length, clearProgressMutation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoadingProgress, savedProgress, user, answers.length]);
 
   const handleResume = useCallback(() => {
+    if (savedProgress) {
+      if (savedProgress.answers.length >= totalQuestions) {
+        clearProgressRef.current.mutateAsync().catch(() => {});
+        navigateRef.current("/results");
+        setShowResumeDialog(false);
+        return;
+      }
+      restoreProgress(
+        savedProgress.answers,
+        savedProgress.current_index,
+        savedProgress.question_order
+      );
+    }
+    setShowResumeDialog(false);
+    setShowIntro(false);
+  }, [savedProgress, restoreProgress, totalQuestions]);
+
+  const handleStartNew = useCallback(async () => {
+    await clearProgressRef.current.mutateAsync();
     setShowResumeDialog(false);
     setShowIntro(false);
   }, []);
 
-  const handleStartNew = useCallback(async () => {
-    await clearProgressMutation.mutateAsync();
-    setShowResumeDialog(false);
-    setShowIntro(false);
-  }, [clearProgressMutation]);
-
   // Auto-save progress
   useEffect(() => {
-    if (!user || answers.length === 0 || isComplete) return;
+    if (!userRef.current || answers.length === 0 || isComplete) return;
 
     const progressKey = `${currentIndex}-${answers.length}`;
     if (progressKey === lastSavedRef.current) return;
 
     const saveTimer = setTimeout(() => {
       const questionOrder = getQuestionOrder();
-      saveProgressMutation.mutate({
+      saveProgressRef.current.mutate({
         currentIndex,
         answers,
         questionOrder,
@@ -134,47 +169,58 @@ export default function MobileAssessmentPage() {
     }, 2000);
 
     return () => clearTimeout(saveTimer);
-  }, [user, currentIndex, answers, isComplete, saveProgressMutation, getQuestionOrder]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, answers, isComplete]);
 
-  // Handle completion
+  // Handle completion — only fires once when isComplete flips to true
   useEffect(() => {
-    const handleComplete = async () => {
-      if (!isComplete || isSaving) return;
-      
-      setIsSaving(true);
+    if (!isComplete || isSavingRef.current) return;
+    isSavingRef.current = true;
+    setIsSaving(true);
+
+    const runCompletion = async () => {
+      const latestAnswers = answersRef.current;
       const results = calculateResults();
       const completionTimeSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
+      const currentUser = userRef.current;
+      const currentLanguage = languageRef.current;
 
       sessionStorage.setItem("assessmentResults", JSON.stringify(results));
 
-      if (user) {
+      if (currentUser) {
         try {
           const savedResult = await saveResultMutation.mutateAsync({
             result: results,
             questionCount: totalQuestions,
             completionTimeSeconds,
-            answers,
+            answers: latestAnswers,
           });
           sessionStorage.setItem("currentResultId", savedResult.id);
-          await clearProgressMutation.mutateAsync();
-          toast.success(language === "en" ? "Results saved" : language === "zh-TW" ? "測評結果已儲存" : "测评结果已保存");
+          
+          try {
+            await completeAssignmentMutation.mutateAsync(savedResult.id);
+          } catch (assignmentError) {
+            console.warn("Assignment status update skipped:", assignmentError);
+          }
+          
+          await clearProgressRef.current.mutateAsync();
+          // Clear pending CP transaction — assessment completed successfully
+          sessionStorage.removeItem("pending_cp_transaction_id");
+          toast.success(currentLanguage === "en" ? "Results saved" : currentLanguage === "zh-TW" ? "測評結果已儲存" : "测评结果已保存");
         } catch (error) {
           console.error("Failed to save:", error);
-          toast.error(language === "en" ? "Failed to save" : language === "zh-TW" ? "儲存失敗" : "保存失败");
+          toast.error(currentLanguage === "en" ? "Failed to save" : currentLanguage === "zh-TW" ? "儲存失敗" : "保存失败");
         }
       }
 
-      // Navigate to ideal card test if combined assessment, otherwise to results
       const isCombinedAssessment = sessionStorage.getItem('scpc_combined_assessment') === 'true';
-      if (isCombinedAssessment) {
-        navigate("/ideal-card-test");
-      } else {
-        navigate("/results");
-      }
+      navigateRef.current(isCombinedAssessment ? "/ideal-card-test" : "/results");
     };
 
-    handleComplete();
-  }, [isComplete, isSaving, calculateResults, navigate, user, saveResultMutation, totalQuestions, clearProgressMutation, language]);
+    runCompletion();
+    // Only trigger when isComplete flips to true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isComplete]);
 
   const handleOptionClick = (value: number) => {
     setSelectedOption(value);
@@ -185,19 +231,20 @@ export default function MobileAssessmentPage() {
   };
 
   const handleSaveAndExit = useCallback(async () => {
-    if (user && answers.length > 0 && !isComplete) {
+    if (userRef.current && answers.length > 0 && !isComplete) {
       const questionOrder = getQuestionOrder();
-      await saveProgressMutation.mutateAsync({
+      await saveProgressRef.current.mutateAsync({
         currentIndex,
         answers,
         questionOrder,
       });
+      const currentLang = languageRef.current;
       toast.success(
-        language === "en" ? "Progress saved" : language === "zh-TW" ? "進度已儲存" : "进度已保存"
+        currentLang === "en" ? "Progress saved" : currentLang === "zh-TW" ? "進度已儲存" : "进度已保存"
       );
     }
-    navigate("/");
-  }, [user, answers, isComplete, currentIndex, getQuestionOrder, saveProgressMutation, language, navigate]);
+    navigateRef.current("/");
+  }, [answers, isComplete, currentIndex, getQuestionOrder]);
 
   // Listen for save-and-exit event from MainLayout header button
   useEffect(() => {
@@ -277,6 +324,27 @@ export default function MobileAssessmentPage() {
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Show completion/saving screen to prevent further interaction
+  if (isComplete || isSaving) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center space-y-3"
+        >
+          <Loader2 className="w-8 h-8 animate-spin mx-auto" style={{ color: "hsl(75, 55%, 50%)" }} />
+          <p className="text-base font-medium" style={{ color: "hsl(228, 51%, 25%)" }}>
+            {language === "en" ? "Assessment Complete!" : language === "zh-TW" ? "測評完成！" : "测评完成！"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {language === "en" ? "Saving your results..." : language === "zh-TW" ? "正在儲存您的結果..." : "正在保存您的结果..."}
+          </p>
+        </motion.div>
       </div>
     );
   }

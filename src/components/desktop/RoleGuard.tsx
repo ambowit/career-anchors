@@ -23,11 +23,29 @@ export default function RoleGuard({
   const [roleRetried, setRoleRetried] = useState(false);
   const retryingRef = useRef(false);
 
+  // ALL hooks MUST be called before any conditional returns (Rules of Hooks)
+
+  // Collect ALL user roles (primary + additional) for access check
+  const userHasAllowedRole = useMemo(() => {
+    if (!roleType) return false;
+    if (allowedRoles.includes(roleType)) return true;
+    if (profile?.additional_roles && Array.isArray(profile.additional_roles)) {
+      return profile.additional_roles.some(
+        (roleEntry) =>
+          allowedRoles.includes(roleEntry.role_type as RoleType),
+      );
+    }
+    return false;
+  }, [roleType, profile?.additional_roles, allowedRoles]);
+
   // When user exists but profile hasn't loaded yet, try refreshing
   useEffect(() => {
     if (user && !profile && !loading) {
       refreshProfile();
-      const timer = setTimeout(() => setProfileTimedOut(true), PROFILE_LOAD_TIMEOUT_MS);
+      const timer = setTimeout(
+        () => setProfileTimedOut(true),
+        PROFILE_LOAD_TIMEOUT_MS,
+      );
       return () => clearTimeout(timer);
     }
     if (profile) {
@@ -52,13 +70,15 @@ export default function RoleGuard({
         retryingRef.current = false;
       });
     }
-  }, [user, profile, loading, roleType, allowedRoles, roleRetried, refreshProfile]);
+  }, [user, profile, loading, userHasAllowedRole, roleRetried, refreshProfile]);
 
   // Reset retry flag when allowed roles change (navigating to different guard)
   useEffect(() => {
     setRoleRetried(false);
     retryingRef.current = false;
   }, [allowedRoles.join(",")]);
+
+  // --- Conditional returns (after all hooks) ---
 
   if (loading) {
     return (
@@ -81,22 +101,13 @@ export default function RoleGuard({
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-muted-foreground">加载用户信息...</span>
+          <span className="text-sm text-muted-foreground">
+            加载用户信息...
+          </span>
         </div>
       </div>
     );
   }
-
-  // Collect ALL user roles (primary + additional) for access check
-  const userHasAllowedRole = useMemo(() => {
-    if (allowedRoles.includes(roleType)) return true;
-    if (profile?.additional_roles && Array.isArray(profile.additional_roles)) {
-      return profile.additional_roles.some(
-        (roleEntry) => allowedRoles.includes(roleEntry.role_type as RoleType),
-      );
-    }
-    return false;
-  }, [roleType, profile?.additional_roles, allowedRoles]);
 
   // If role doesn't match and we haven't retried yet, show loading while retrying
   if (!userHasAllowedRole && !roleRetried && profile) {

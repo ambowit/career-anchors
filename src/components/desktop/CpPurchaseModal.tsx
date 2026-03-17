@@ -61,7 +61,7 @@ const TXT = {
     insufficientDesc: "您需要更多 CP 才能使用此服務",
     needed: "需要",
     deficit: "差額",
-    recharge: "立即充值",
+    recharge: "立即儲值",
     off: "折",
     cpUnit: "CP（生涯點）",
   },

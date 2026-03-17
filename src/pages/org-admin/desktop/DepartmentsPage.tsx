@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FolderTree, Plus, ChevronRight, Edit, Trash2, X, Save, Loader2, AlertTriangle } from "lucide-react";
+import { Plus, ChevronRight, Edit, Trash2, X, Save, Loader2, AlertTriangle } from "lucide-react";
 import { useTranslation } from "@/hooks/useLanguage";
 import { toast } from "sonner";
 import { useOrgDepartments, useCreateDepartment, useUpdateDepartment, useDeleteDepartment } from "@/hooks/useAdminData";
@@ -15,6 +15,13 @@ export default function DepartmentsPage() {
   const deleteMutation = useDeleteDepartment();
   const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
   const [modalMode, setModalMode] = useState<ModalMode>(null);
+
+  // Default: expand all departments
+  useEffect(() => {
+    if (departments && departments.length > 0) {
+      setExpandedDepts(new Set(departments.map((department) => department.id)));
+    }
+  }, [departments]);
   const [formData, setFormData] = useState({ id: "", name: "", parentId: "", managerId: "" });
 
   if (isLoading) {
@@ -93,7 +100,6 @@ export default function DepartmentsPage() {
                 <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${expandedDepts.has(dept.id) ? "rotate-90" : ""}`} />
               </button>
             ) : <div className="w-6" />}
-            <FolderTree className="w-4 h-4 text-sky-500 flex-shrink-0" />
             <span className="font-medium text-sm text-foreground truncate">{dept.name}</span>
           </div>
           <div className="flex items-center gap-6 flex-shrink-0">
@@ -132,7 +138,7 @@ export default function DepartmentsPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
         <div className="bg-card border border-border rounded-lg p-4"><div className="text-2xl font-bold text-foreground">{topLevelDepts.length}</div><div className="text-xs text-muted-foreground">{language === "en" ? "Top-level Departments" : language === "zh-TW" ? "一級部門" : "一级部门"}</div></div>
         <div className="bg-card border border-border rounded-lg p-4"><div className="text-2xl font-bold text-foreground">{totalMembers}</div><div className="text-xs text-muted-foreground">{language === "en" ? "Total Members" : language === "zh-TW" ? "總人數" : "总人数"}</div></div>
         <div className="bg-card border border-border rounded-lg p-4"><div className="text-2xl font-bold text-foreground">{subDeptCount}</div><div className="text-xs text-muted-foreground">{language === "en" ? "Sub-departments" : language === "zh-TW" ? "子部門" : "子部门"}</div></div>

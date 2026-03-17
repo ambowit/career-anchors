@@ -142,7 +142,7 @@ export default function AnswerDetailSection({ answers, language, isEn, showWeigh
           className="flex items-center gap-2 hover:opacity-70 transition-opacity"
         >
           <h4 className="text-sm font-medium text-foreground">
-            {isEn ? `Answer Details (${answers.length} questions)` : `答题详情（${answers.length} 题）`}
+            {isEn ? "Answer Details" : "答題詳情"}
           </h4>
           {isCollapsed ? (
             <ChevronDown className="w-4 h-4 text-muted-foreground" />

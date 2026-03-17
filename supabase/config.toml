@@ -26,3 +26,18 @@ verify_jwt = false
 
 [functions.grant-reward]
 verify_jwt = false
+
+[functions.ideal-card-analysis]
+verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = false
+
+[functions.fusion-analysis]
+verify_jwt = false
+
+[functions.life-card-translate]
+verify_jwt = false
+
+[functions.setup-anon-tables]
+verify_jwt = false

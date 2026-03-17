@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { AssessmentResult, Answer } from "@/hooks/useAssessment";
-import { getHighSensitivityAnchors } from "@/hooks/useAssessment";
+import { getCoreAdvantageAnchors } from "@/hooks/useAssessment";
 import { DIMENSION_CODES, standardizeScores } from "@/data/questions";
 
 export interface StoredAnswer {
@@ -225,12 +225,12 @@ export function convertStoredToResult(stored: StoredAssessmentResult): Assessmen
   };
   const displayScores = standardizeScores(rawScores);
 
-  const highSensitivityAnchors = getHighSensitivityAnchors(displayScores);
+  const coreAdvantageAnchors = getCoreAdvantageAnchors(displayScores);
 
   return {
     scores: displayScores,
     mainAnchor: stored.main_anchor,
-    highSensitivityAnchors,
+    coreAdvantageAnchors,
     conflictAnchors: conflictPairs,
     riskIndex: stored.risk_index,
     stability: stored.stability as "mature" | "developing" | "unclear",

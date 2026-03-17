@@ -5,18 +5,12 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useTestAuth,
-  TEST_ACCOUNTS,
-  getWorkExperienceDescription,
   isConsoleRole,
   getTestConsolePath,
-  getRoleColor,
-  getRoleInitials,
-  getCategoryLabel,
   type UserRole,
-  type LanguageKey,
 } from "@/hooks/useTestAuth";
 import { useTranslation } from "@/hooks/useLanguage";
-import { getRoleLabel, findConsoleRoleFromProfile } from "@/lib/permissions";
+import { findConsoleRoleFromProfile } from "@/lib/permissions";
 import { navigateToConsoleWithSwap } from "@/lib/consoleUtils";
 import type { RoleType } from "@/lib/permissions";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,26 +37,24 @@ import {
   Gift,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 
-const CATEGORY_ORDER = ["platform", "organization", "consultant", "individual"] as const;
-const ROLES_BY_CATEGORY: Record<string, UserRole[]> = {
-  platform: ["super_admin", "partner"],
-  organization: ["org_admin", "hr", "department_manager", "employee"],
-  consultant: ["consultant", "client"],
-  individual: ["individual"],
-};
+
 
 export default function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { t, language } = useTranslation();
   const { user, profile, loading, signOut, signInWithEmail, refreshProfile } = useAuth();
-  const { isTestLoggedIn, testRole, isLoading, testLogin, testLogout, clearError } = useTestAuth();
+  const { isTestLoggedIn, testRole, isLoading, testLogout } = useTestAuth();
+
+
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
+  const { isCpPointsEnabled } = useFeaturePermissions();
 
   const isAssessment = location.pathname.includes("/assessment");
 
@@ -83,29 +75,7 @@ export default function MainLayout() {
     navigate("/");
   };
 
-  const handleTestRoleSelect = async (role: UserRole) => {
-    clearError();
-    await testLogin(role);
-    await refreshProfile();
 
-    const currentState = useTestAuth.getState();
-    if (!currentState.error && currentState.isTestLoggedIn) {
-      setShowRoleDropdown(false);
-      const roleName = TEST_ACCOUNTS[role].name[language as LanguageKey];
-      toast.success(
-        language === "en"
-          ? `Logged in as ${roleName}`
-          : language === "zh-TW" ? `已登入為${roleName}`
-          : `已登录为${roleName}`
-      );
-      const consolePath = getTestConsolePath(role);
-      if (consolePath !== "/") {
-        navigate(consolePath);
-      }
-    } else if (currentState.error) {
-      toast.error(language === "en" ? "Login failed" : language === "zh-TW" ? "登入失敗" : "登录失败");
-    }
-  };
 
   const handleEmailLogin = async () => {
     if (!loginEmail || !loginPassword) return;
@@ -213,12 +183,18 @@ export default function MainLayout() {
                 >
                   {t("history.title")}
                 </Link>
-                <Link
-                  to="/assessment"
+                <button
+                  onClick={() => {
+                    if (location.pathname === "/") {
+                      document.getElementById('assessment-select')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    } else {
+                      navigate('/', { state: { scrollToAssessment: true } });
+                    }
+                  }}
                   className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-sm btn-mechanical hover:bg-primary/90 transition-colors"
                 >
                   {t("home.startAssessment")}
-                </Link>
+                </button>
               </>
             )}
             {isAssessment && (
@@ -250,16 +226,12 @@ export default function MainLayout() {
                   <Button variant="ghost" className="relative h-9 gap-2 px-3 rounded-lg">
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-                      style={{ backgroundColor: getRoleColor(testRole) }}
+                      style={{ backgroundColor: "hsl(75, 55%, 45%)" }}
                     >
-                      {isTestLoggedIn
-                        ? getRoleInitials(testRole)
-                        : getInitials(profile?.full_name || user.email)}
+                      {getInitials(profile?.full_name || user.email)}
                     </div>
                     <span className="text-sm font-medium">
-                      {isTestLoggedIn
-                        ? TEST_ACCOUNTS[testRole].name[language as LanguageKey]
-                        : profile?.full_name || user.email?.split("@")[0]}
+                      {profile?.full_name || user.email?.split("@")[0]}
                     </span>
                     {(() => {
                       const { workYears } = useTestAuth.getState();
@@ -280,55 +252,24 @@ export default function MainLayout() {
                   <div className="flex items-center gap-3 p-2">
                     <div
                       className="w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                      style={{ backgroundColor: getRoleColor(testRole) }}
+                      style={{ backgroundColor: "hsl(75, 55%, 45%)" }}
                     >
-                      {isTestLoggedIn ? getRoleInitials(testRole) : getInitials(profile?.full_name)}
+                      {getInitials(profile?.full_name)}
                     </div>
                     <div className="min-w-0">
                       <p className="font-medium text-sm truncate">
-                        {isTestLoggedIn
-                          ? TEST_ACCOUNTS[testRole].name[language as LanguageKey]
-                          : profile?.full_name || user.email}
+                        {profile?.full_name || user.email}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
                         {user.email}
                       </p>
-                      {isTestLoggedIn && (
-                        <span
-                          className="inline-block mt-0.5 text-[10px] px-1.5 py-0.5 rounded font-medium"
-                          style={{
-                            backgroundColor: getRoleColor(testRole) + "18",
-                            color: getRoleColor(testRole),
-                          }}
-                        >
-                          {getRoleLabel(testRole as RoleType, language as "zh-CN" | "zh-TW" | "en")}
-                        </span>
-                      )}
                     </div>
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link to="/messages" className="cursor-pointer">
-                      <Mail className="mr-2 h-4 w-4" />
-                      {language === "en" ? "Messages" : language === "zh-TW" ? "訊息" : "消息"}
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
                     <Link to="/history" className="cursor-pointer">
                       <History className="mr-2 h-4 w-4" />
                       {t("history.title")}
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/cp-wallet" className="cursor-pointer">
-                      <Wallet className="mr-2 h-4 w-4" />
-                      {language === "en" ? "CP Wallet" : language === "zh-TW" ? "CP \u9322\u5305" : "CP \u94b1\u5305"}
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/referral" className="cursor-pointer">
-                      <Gift className="mr-2 h-4 w-4" />
-                      {language === "en" ? "Referral Rewards" : language === "zh-TW" ? "推薦獎勵" : "推荐奖励"}
                     </Link>
                   </DropdownMenuItem>
                   {user && (
@@ -336,6 +277,28 @@ export default function MainLayout() {
                       <Link to="/change-password" className="cursor-pointer">
                         <Lock className="mr-2 h-4 w-4" />
                         {language === "en" ? "Change Password" : language === "zh-TW" ? "修改密碼" : "修改密码"}
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem asChild>
+                    <Link to="/messages" className="cursor-pointer">
+                      <Mail className="mr-2 h-4 w-4" />
+                      {language === "en" ? "Messages" : language === "zh-TW" ? "訊息" : "消息"}
+                    </Link>
+                  </DropdownMenuItem>
+                  {isCpPointsEnabled && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/cp-wallet" className="cursor-pointer">
+                        <Wallet className="mr-2 h-4 w-4" />
+                        {language === "en" ? "CP Wallet" : language === "zh-TW" ? "CP \u9322\u5305" : "CP \u94b1\u5305"}
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {isCpPointsEnabled && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/referral" className="cursor-pointer">
+                        <Gift className="mr-2 h-4 w-4" />
+                        {language === "en" ? "Referral Rewards" : language === "zh-TW" ? "推薦獎勵" : "推荐奖励"}
                       </Link>
                     </DropdownMenuItem>
                   )}

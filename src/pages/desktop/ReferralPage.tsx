@@ -19,6 +19,8 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { Navigate } from "react-router-dom";
 
 const TXT = {
   en: {
@@ -149,8 +151,13 @@ const STATUS_COLORS: Record<string, string> = {
 export default function ReferralPage() {
   const { session } = useAuth();
   const { language } = useLanguage();
+  const { isCpPointsEnabled } = useFeaturePermissions();
   const txt = TXT[language] || TXT["zh-TW"];
   const userId = session?.user?.id;
+
+  if (!isCpPointsEnabled) {
+    return <Navigate to="/" replace />;
+  }
   const [codeCopied, setCodeCopied] = useState(false);
 
   // Generate referral code from user ID (first 8 chars uppercase)
@@ -406,7 +413,7 @@ export default function ReferralPage() {
                   <card.icon className={cn("w-5 h-5", card.iconColor)} />
                   <span className="text-sm font-medium text-slate-700">{card.label}</span>
                 </div>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-200 text-slate-500">
+                <Badge variant="outline" className="text-[10px] px-1.5 h-5 border-slate-200 text-slate-500">
                   {card.category}
                 </Badge>
               </div>

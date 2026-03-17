@@ -17,8 +17,10 @@ import {
   Users,
 } from "lucide-react";
 import { useTranslation } from "@/hooks/useLanguage";
-import { useInboxMessages, useSentMessages, useUnreadCount, useMarkAsRead, useSendMessage, type Message } from "@/hooks/useMessages";
-import { useOrgUsers } from "@/hooks/useAdminData";
+import { useInboxMessages, useSentMessages, useUnreadCount, useMarkAsRead, type Message } from "@/hooks/useMessages";
+import { useOrgUsers, useOrgDepartments } from "@/hooks/useAdminData";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 const TYPE_ICONS: Record<string, { icon: typeof Bell; color: string; bg: string }> = {
@@ -94,12 +96,17 @@ export default function OrgMessagesPage() {
   const { data: sent = [] } = useSentMessages();
   const { data: unreadCount = 0 } = useUnreadCount();
   const markAsRead = useMarkAsRead();
-  const sendMessage = useSendMessage();
   const [tab, setTab] = useState<"inbox" | "sent">("inbox");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Message | null>(null);
   const [showCompose, setShowCompose] = useState(false);
   const [composeData, setComposeData] = useState({ recipient: "", subject: "", content: "" });
+  const [targetType, setTargetType] = useState<"all" | "department" | "individual">("all");
+  const [targetDeptId, setTargetDeptId] = useState("");
+  const [sending, setSending] = useState(false);
+  const { data: departments = [] } = useOrgDepartments();
+  const { data: orgUsers = [] } = useOrgUsers();
+  const { user } = useAuth();
 
   const isEn = language === "en";
   const messages = tab === "inbox" ? inbox : sent;
@@ -113,48 +120,96 @@ export default function OrgMessagesPage() {
     if (!message.is_read && tab === "inbox") markAsRead.mutate(message.id);
   };
 
-  const handleSend = () => {
-    if (!composeData.recipient || !composeData.content) {
-      toast.error(isEn ? "Please fill all fields" : "请填写所有字段");
+  const handleSend = async () => {
+    if (!composeData.content) {
+      toast.error(isEn ? "Please enter content" : language === "zh-TW" ? "請輸入內容" : "请输入内容");
       return;
     }
-    sendMessage.mutate(
-      { recipient_id: composeData.recipient, subject: composeData.subject, content: composeData.content, channel: "org_internal", message_type: "notification" },
-      { onSuccess: () => { toast.success(isEn ? "Sent" : "已发送"); setShowCompose(false); setComposeData({ recipient: "", subject: "", content: "" }); } }
+    let recipientIds: string[] = [];
+    if (targetType === "all") {
+      recipientIds = orgUsers.map((u) => u.id);
+      if (recipientIds.length === 0) {
+        toast.error(isEn ? "No members found" : language === "zh-TW" ? "未找到成員" : "未找到成员");
+        return;
+      }
+    } else if (targetType === "department") {
+      if (!targetDeptId) {
+        toast.error(isEn ? "Please select a department" : language === "zh-TW" ? "請選擇部門" : "请选择部门");
+        return;
+      }
+      recipientIds = orgUsers.filter((u) => u.department_id === targetDeptId).map((u) => u.id);
+      if (recipientIds.length === 0) {
+        toast.error(isEn ? "No members in this department" : language === "zh-TW" ? "該部門暫無成員" : "该部门暂无成员");
+        return;
+      }
+    } else {
+      if (!composeData.recipient) {
+        toast.error(isEn ? "Please select a recipient" : language === "zh-TW" ? "請選擇收件人" : "请选择收件人");
+        return;
+      }
+      recipientIds = [composeData.recipient];
+    }
+    setSending(true);
+    const { error } = await supabase.from("messages").insert(
+      recipientIds.map((recipientId) => ({
+        sender_id: user?.id,
+        recipient_id: recipientId,
+        subject: composeData.subject,
+        content: composeData.content,
+        message_type: "notification",
+        channel: "org_internal",
+        is_read: false,
+      }))
     );
+    setSending(false);
+    if (error) {
+      toast.error(isEn ? "Send failed" : language === "zh-TW" ? "發送失敗" : "发送失败");
+      return;
+    }
+    toast.success(
+      isEn
+        ? `Sent to ${recipientIds.length} member(s)`
+        : language === "zh-TW"
+          ? `已發送給 ${recipientIds.length} 位成員`
+          : `已发送给 ${recipientIds.length} 位成员`
+    );
+    setShowCompose(false);
+    setComposeData({ recipient: "", subject: "", content: "" });
+    setTargetType("all");
+    setTargetDeptId("");
   };
 
   const formatTime = (d: string) => {
     const diff = Date.now() - new Date(d).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}${isEn ? "m" : "分钟"}`;
+    if (mins < 60) return `${mins}${isEn ? "m" : language === "zh-TW" ? "分鐘" : "分钟"}`;
     const hrs = Math.floor(diff / 3600000);
-    if (hrs < 24) return `${hrs}${isEn ? "h" : "小时"}`;
-    return new Date(d).toLocaleDateString(isEn ? "en-US" : "zh-CN", { month: "short", day: "numeric" });
+    if (hrs < 24) return `${hrs}${isEn ? "h" : language === "zh-TW" ? "小時" : "小时"}`;
+    return new Date(d).toLocaleDateString(isEn ? "en-US" : language === "zh-TW" ? "zh-TW" : "zh-CN", { month: "short", day: "numeric" });
   };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground mb-1">{isEn ? "Internal Messages" : "机构消息"}</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-1">{isEn ? "Internal Messages" : language === "zh-TW" ? "機構消息" : "机构消息"}</h1>
           <p className="text-sm text-muted-foreground">
-            {isEn ? "Organizational notifications and announcements" : "机构内部通知与公告"}
-            {unreadCount > 0 && ` · ${unreadCount} ${isEn ? "unread" : "条未读"}`}
+            {isEn ? "Organizational notifications and announcements" : language === "zh-TW" ? "機構內部通知與公告" : "机构内部通知与公告"}
+            {unreadCount > 0 && ` · ${unreadCount} ${isEn ? "unread" : language === "zh-TW" ? "條未讀" : "条未读"}`}
           </p>
         </div>
         <button onClick={() => setShowCompose(true)} className="flex items-center gap-2 px-4 py-2 bg-sky-500 text-white rounded-lg text-sm font-medium hover:bg-sky-600 transition-colors">
           <Plus className="w-4 h-4" />
-          {isEn ? "Announce" : "发布通知"}
+          {isEn ? "Announce" : language === "zh-TW" ? "發布通知" : "发布通知"}
         </button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
         {[
-          { label: isEn ? "Inbox" : "收件箱", value: inbox.length, icon: Inbox, color: "text-sky-600", bg: "bg-sky-50" },
-          { label: isEn ? "Unread" : "未读", value: unreadCount, icon: Mail, color: "text-red-600", bg: "bg-red-50" },
-          { label: isEn ? "Sent" : "已发送", value: sent.length, icon: Send, color: "text-emerald-600", bg: "bg-emerald-50" },
+          { label: isEn ? "Inbox" : language === "zh-TW" ? "收件匣" : "收件箱", value: inbox.length, icon: Inbox, color: "text-sky-600", bg: "bg-sky-50" },
+          { label: isEn ? "Unread" : language === "zh-TW" ? "未讀" : "未读", value: unreadCount, icon: Mail, color: "text-red-600", bg: "bg-red-50" },
+          { label: isEn ? "Sent" : language === "zh-TW" ? "已發送" : "已发送", value: sent.length, icon: Send, color: "text-emerald-600", bg: "bg-emerald-50" },
         ].map((s, i) => (
           <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
             <div className={`w-9 h-9 rounded-lg ${s.bg} ${s.color} flex items-center justify-center`}><s.icon className="w-4 h-4" /></div>
@@ -178,7 +233,7 @@ export default function OrgMessagesPage() {
                   tab === key ? "text-sky-600 border-b-2 border-sky-500" : "text-muted-foreground"
                 }`}
               >
-                {key === "inbox" ? (isEn ? "Inbox" : "收件箱") : (isEn ? "Sent" : "已发送")}
+                {key === "inbox" ? (isEn ? "Inbox" : language === "zh-TW" ? "收件匣" : "收件箱") : (isEn ? "Sent" : language === "zh-TW" ? "已發送" : "已发送")}
                 {key === "inbox" && unreadCount > 0 && (
                   <span className="ml-1.5 px-1.5 py-0.5 bg-sky-500 text-white text-[9px] font-bold rounded-full">{unreadCount}</span>
                 )}
@@ -197,7 +252,7 @@ export default function OrgMessagesPage() {
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center py-10">
                 <MailOpen className="w-8 h-8 text-muted-foreground/20 mb-2" />
-                <p className="text-xs text-muted-foreground">{isEn ? "No messages" : "暂无消息"}</p>
+                <p className="text-xs text-muted-foreground">{isEn ? "No messages" : language === "zh-TW" ? "暫無消息" : "暂无消息"}</p>
               </div>
             ) : (
               filtered.map((m) => {
@@ -209,7 +264,7 @@ export default function OrgMessagesPage() {
                       <div className={`w-7 h-7 rounded-md ${cfg.bg} ${cfg.color} flex items-center justify-center shrink-0`}><Icon className="w-3.5 h-3.5" /></div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className={`text-xs truncate ${!m.is_read ? "font-semibold" : "font-medium text-foreground/80"}`}>{m.subject || (isEn ? "No subject" : "无主题")}</span>
+                          <span className={`text-xs truncate ${!m.is_read ? "font-semibold" : "font-medium text-foreground/80"}`}>{m.subject || (isEn ? "No subject" : language === "zh-TW" ? "無主題" : "无主题")}</span>
                           {!m.is_read && <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />}
                         </div>
                         <p className="text-[11px] text-muted-foreground truncate">{m.content}</p>
@@ -238,7 +293,7 @@ export default function OrgMessagesPage() {
           ) : (
             <div className="h-full flex flex-col items-center justify-center">
               <Building2 className="w-12 h-12 text-muted-foreground/15 mb-3" />
-              <p className="text-sm text-muted-foreground">{isEn ? "Select a message" : "选择消息查看"}</p>
+              <p className="text-sm text-muted-foreground">{isEn ? "Select a message" : language === "zh-TW" ? "選擇消息查看" : "选择消息查看"}</p>
             </div>
           )}
         </div>
@@ -250,17 +305,56 @@ export default function OrgMessagesPage() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCompose(false)}>
             <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-card border border-border rounded-xl p-6 w-full max-w-lg shadow-xl" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-semibold">{isEn ? "Send Notification" : "发布通知"}</h3>
+                <h3 className="text-lg font-semibold">{isEn ? "Send Notification" : language === "zh-TW" ? "發布通知" : "发布通知"}</h3>
                 <button onClick={() => setShowCompose(false)} className="p-1 rounded hover:bg-muted/20"><X className="w-4 h-4" /></button>
               </div>
               <div className="space-y-3">
-                <RecipientSelect value={composeData.recipient} onChange={(value) => setComposeData({ ...composeData, recipient: value })} isEn={isEn} />
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    {isEn ? "Send To" : language === "zh-TW" ? "發送對象" : "发送对象"}
+                  </label>
+                  <div className="flex gap-2">
+                    {(["all", "department", "individual"] as const).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => { setTargetType(type); setTargetDeptId(""); setComposeData({ ...composeData, recipient: "" }); }}
+                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
+                          targetType === type
+                            ? "bg-sky-500 text-white"
+                            : "bg-muted/10 border border-border text-muted-foreground hover:bg-muted/20"
+                        }`}
+                      >
+                        {type === "all"
+                          ? (isEn ? "All Members" : language === "zh-TW" ? "全員" : "全员")
+                          : type === "department"
+                            ? (isEn ? "By Dept" : language === "zh-TW" ? "按部門" : "按部门")
+                            : (isEn ? "Individual" : language === "zh-TW" ? "指定個人" : "指定个人")}
+                      </button>
+                    ))}
+                  </div>
+                  {targetType === "department" && (
+                    <select
+                      value={targetDeptId}
+                      onChange={(e) => setTargetDeptId(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/30"
+                    >
+                      <option value="">{isEn ? "Select department..." : language === "zh-TW" ? "選擇部門..." : "选择部门..."}</option>
+                      {departments.map((dept) => (
+                        <option key={dept.id} value={dept.id}>{dept.name}</option>
+                      ))}
+                    </select>
+                  )}
+                  {targetType === "individual" && (
+                    <RecipientSelect value={composeData.recipient} onChange={(value) => setComposeData({ ...composeData, recipient: value })} isEn={isEn} />
+                  )}
+                </div>
                 <input type="text" value={composeData.subject} onChange={(e) => setComposeData({ ...composeData, subject: e.target.value })} placeholder={isEn ? "Subject" : "主题"} className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/30" />
                 <textarea value={composeData.content} onChange={(e) => setComposeData({ ...composeData, content: e.target.value })} placeholder={isEn ? "Content..." : "内容..."} rows={4} className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/30 resize-none" />
               </div>
               <div className="flex justify-end gap-3 mt-5">
                 <button onClick={() => setShowCompose(false)} className="px-4 py-2 text-sm text-muted-foreground">{isEn ? "Cancel" : "取消"}</button>
-                <button onClick={handleSend} disabled={sendMessage.isPending} className="flex items-center gap-2 px-4 py-2 bg-sky-500 text-white rounded-lg text-sm font-medium hover:bg-sky-600 disabled:opacity-60 transition-colors">
+                <button onClick={handleSend} disabled={sending} className="flex items-center gap-2 px-4 py-2 bg-sky-500 text-white rounded-lg text-sm font-medium hover:bg-sky-600 disabled:opacity-60 transition-colors">
                   <Send className="w-3.5 h-3.5" />{isEn ? "Send" : "发送"}
                 </button>
               </div>

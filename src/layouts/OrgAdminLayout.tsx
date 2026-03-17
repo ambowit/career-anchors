@@ -6,7 +6,6 @@ import {
   FolderTree,
   ClipboardList,
   BarChart3,
-  FileDown,
   Settings,
   LogOut,
   ChevronLeft,
@@ -21,6 +20,8 @@ import {
   RefreshCw,
   Menu,
   X,
+  Link2,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -31,6 +32,8 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import LanguageSwitcher from "@/components/desktop/LanguageSwitcher";
 import RoleSwitcher from "@/components/desktop/RoleSwitcher";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useFeaturePermissions, type FeatureKey } from "@/hooks/useFeaturePermissions";
+import { useOrgInfo } from "@/hooks/useAdminData";
 
 const SCPC_LOGO = "https://b.ux-cdn.com/uxarts/20260226/1eeac3700a3d4b41ad6120512fa02969.png";
 
@@ -43,6 +46,10 @@ export default function OrgAdminLayout() {
   const { isCollapsed, toggleCollapse } = useSidebarCollapse();
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { hasFeature } = useFeaturePermissions();
+  const { data: orgInfo } = useOrgInfo();
+  const orgDisplayName = orgInfo?.name || "";
+  const orgLogoUrl = orgInfo?.logo_url || "";
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -59,23 +66,24 @@ export default function OrgAdminLayout() {
     return () => { document.body.style.overflow = ""; };
   }, [mobileMenuOpen, isMobile]);
 
-  const allNavItems = [
+  const allNavItems: Array<{ path: string; icon: React.ElementType; label: string; end?: boolean; module: string; featureKey?: FeatureKey }> = [
     { path: "/org", icon: LayoutDashboard, label: language === "en" ? "Dashboard" : language === "zh-TW" ? "儀表板" : "仪表盘", end: true, module: "dashboard" as const },
     { path: "/org/users", icon: Users, label: language === "en" ? "User Management" : language === "zh-TW" ? "使用者管理" : "用户管理", module: "users" as const },
     { path: "/org/roles", icon: ShieldCheck, label: language === "en" ? "Role Management" : language === "zh-TW" ? "角色管理" : "角色管理", module: "users" as const },
     { path: "/org/departments", icon: FolderTree, label: language === "en" ? "Departments" : language === "zh-TW" ? "部門管理" : "部门管理", module: "departments" as const },
     { path: "/org/assessments", icon: ClipboardList, label: language === "en" ? "Assessments" : language === "zh-TW" ? "測評管理" : "测评管理", module: "assessments" as const },
-    { path: "/org/analytics", icon: BarChart3, label: language === "en" ? "Analytics" : language === "zh-TW" ? "數據分析" : "数据分析", module: "analytics" as const },
-    { path: "/org/reports", icon: FileDown, label: language === "en" ? "Reports" : language === "zh-TW" ? "報告匯出" : "报告导出", module: "reports" as const },
+    { path: "/org/analytics", icon: BarChart3, label: language === "en" ? "Analytics" : language === "zh-TW" ? "資料分析" : "数据分析", module: "analytics" as const, featureKey: "analytics" },
     { path: "/org/assessment-reports", icon: FileBarChart, label: language === "en" ? "Assessment Reports" : language === "zh-TW" ? "測評報告" : "测评报告", module: "reports" as const },
-    { path: "/org/messages", icon: MessageCircle, label: language === "en" ? "Messages" : language === "zh-TW" ? "機構訊息" : "机构消息", module: "dashboard" as const },
-    { path: "/org/certification-overview", icon: Award, label: language === "en" ? "Certification" : language === "zh-TW" ? "認證總覽" : "认证总览", module: "dashboard" as const },
-    { path: "/org/cdu-monitoring", icon: BookOpen, label: language === "en" ? "CDU Monitoring" : language === "zh-TW" ? "CDU 監控" : "CDU 监控", module: "dashboard" as const },
-    { path: "/org/renewal-approval", icon: RefreshCw, label: language === "en" ? "Renewal Approval" : language === "zh-TW" ? "換證審核" : "换证审核", module: "dashboard" as const },
+    { path: "/org/messages", icon: MessageCircle, label: language === "en" ? "Messages" : language === "zh-TW" ? "機構訊息" : "机构消息", module: "dashboard" as const, featureKey: "message" },
+    { path: "/org/certification-overview", icon: Award, label: language === "en" ? "Certification" : language === "zh-TW" ? "認證總覽" : "认证总览", module: "dashboard" as const, featureKey: "certification" },
+    { path: "/org/cdu-monitoring", icon: BookOpen, label: language === "en" ? "CDU Monitoring" : language === "zh-TW" ? "CDU 監控" : "CDU 监控", module: "dashboard" as const, featureKey: "cdu_records" },
+    { path: "/org/renewal-approval", icon: RefreshCw, label: language === "en" ? "Renewal Approval" : language === "zh-TW" ? "換證審核" : "换证审核", module: "dashboard" as const, featureKey: "certification" },
+    { path: "/org/batch-assessment", icon: Layers, label: language === "en" ? "Batch Assessment" : language === "zh-TW" ? "批次施測" : "批次施测", module: "dashboard" as const },
+    { path: "/org/anonymous-assessment", icon: Link2, label: language === "en" ? "Anonymous Assessment" : language === "zh-TW" ? "匿名測評" : "匿名测评", module: "dashboard" as const, featureKey: "anonymous_assessment" as FeatureKey },
     { path: "/org/settings", icon: Settings, label: language === "en" ? "Settings" : language === "zh-TW" ? "設定" : "设置", module: "system_settings" as const },
   ];
 
-  const navItems = allNavItems.filter((item) => canAccess(item.module));
+  const navItems = allNavItems.filter((item) => canAccess(item.module) && (!item.featureKey || hasFeature(item.featureKey)));
 
   const handleLogout = async () => {
     await signOut();
@@ -128,9 +136,13 @@ export default function OrgAdminLayout() {
           <>
             <Link to="/" className="flex items-center gap-3">
               <img src={SCPC_LOGO} alt="SCPC" className="h-8 w-8 rounded object-contain" />
-              <div className="flex items-center gap-2">
-                <span className="text-white font-bold text-base tracking-tight">SCPC</span>
-                <span className="text-[10px] text-sky-300 font-semibold px-1.5 py-0.5 rounded bg-sky-500/15 whitespace-nowrap">
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white font-bold text-base tracking-tight">SCPC</span>
+                  {orgLogoUrl && <img src={orgLogoUrl} alt="" className="h-5 w-5 rounded object-contain flex-shrink-0" />}
+                  {orgDisplayName && <span className="text-sky-200/80 text-xs font-medium truncate max-w-[120px]">{orgDisplayName}</span>}
+                </div>
+                <span className="text-[10px] text-sky-300/70 font-medium">
                   {language === "en" ? "Organization" : language === "zh-TW" ? "機構管理" : "机构管理"}
                 </span>
               </div>
@@ -150,9 +162,13 @@ export default function OrgAdminLayout() {
             )}>
               <img src={SCPC_LOGO} alt="SCPC" className="h-8 w-8 rounded object-contain flex-shrink-0" />
               {!isCollapsed && (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-white font-bold text-base tracking-tight">SCPC</span>
-                  <span className="text-[10px] text-sky-300 font-semibold px-1.5 py-0.5 rounded bg-sky-500/15 whitespace-nowrap">
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-white font-bold text-base tracking-tight">SCPC</span>
+                    {orgLogoUrl && <img src={orgLogoUrl} alt="" className="h-5 w-5 rounded object-contain flex-shrink-0" />}
+                    {orgDisplayName && <span className="text-sky-200/80 text-xs font-medium truncate max-w-[120px]">{orgDisplayName}</span>}
+                  </div>
+                  <span className="text-[10px] text-sky-300/70 font-medium">
                     {language === "en" ? "Organization" : language === "zh-TW" ? "機構管理" : "机构管理"}
                   </span>
                 </div>
@@ -285,7 +301,7 @@ export default function OrgAdminLayout() {
         {/* Top bar */}
         <div className={cn(
           "flex items-center justify-between border-b border-slate-200 bg-white sticky top-0 z-10",
-          isMobile ? "h-14 px-4" : "h-16 px-8"
+          isMobile ? "h-14 px-4 pt-[env(safe-area-inset-top)]" : "h-16 px-8"
         )}>
           <div className="flex items-center gap-3">
             {isMobile && (
@@ -301,9 +317,19 @@ export default function OrgAdminLayout() {
               {language === "en" ? "Organization Console" : language === "zh-TW" ? "機構控制台" : "机构控制台"}
             </span>
           </div>
-          <LanguageSwitcher />
+          <div className="flex items-center gap-2">
+            {isMobile && (
+              <button
+                onClick={() => navigate("/")}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 transition-colors"
+              >
+                {language === "en" ? "User Mode" : language === "zh-TW" ? "使用者" : "使用者"}
+              </button>
+            )}
+            <LanguageSwitcher />
+          </div>
         </div>
-        <div className={cn(isMobile ? "p-4" : "p-8")}>
+        <div className={cn("admin-page-content", isMobile ? "p-4 overflow-x-auto" : "p-8")}>
           <Outlet />
         </div>
       </main>

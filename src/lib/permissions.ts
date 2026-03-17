@@ -12,6 +12,7 @@ export type RoleType =
   | "consultant"
   | "client"
   | "individual"
+  | "collaborator"
   | "partner";
 
 export type RoleCategory = "platform" | "organization" | "consultant" | "individual";
@@ -30,6 +31,8 @@ export function getRoleCategory(roleType: RoleType): RoleCategory {
       return "consultant";
     case "individual":
       return "individual";
+    case "collaborator":
+      return "consultant";
     case "partner":
       return "platform";
   }
@@ -46,6 +49,7 @@ export function getRoleLevel(roleType: RoleType): number {
     employee: 40,
     client: 30,
     individual: 20,
+    collaborator: 55,
     partner: 50,
   };
   return levels[roleType];
@@ -62,7 +66,8 @@ export function getRoleLabel(roleType: RoleType, language: "zh-CN" | "zh-TW" | "
     consultant: { "zh-CN": "咨询师", "zh-TW": "諮詢師", en: "Consultant" },
     client: { "zh-CN": "咨询客户", "zh-TW": "諮詢客戶", en: "Client" },
     individual: { "zh-CN": "个人用户", "zh-TW": "個人使用者", en: "Individual User" },
-    partner: { "zh-CN": "合作方", "zh-TW": "合作方", en: "Partner" },
+    collaborator: { "zh-CN": "合作者", "zh-TW": "合作者", en: "Collaborator" },
+    partner: { "zh-CN": "产品合作方", "zh-TW": "產品合作方", en: "Partner" },
   };
   return labels[roleType]?.[language] ?? roleType;
 }
@@ -138,8 +143,12 @@ const PERMISSION_MATRIX: Record<RoleType, PermissionModule[]> = {
   individual: [
     "dashboard", "assessments", "reports",
   ],
+  collaborator: [
+    "dashboard", "assessments", "reports", "report_export", "analytics",
+    "client_management",
+  ],
   partner: [
-    "dashboard",
+    "dashboard", "reports",
   ],
 };
 
@@ -162,8 +171,9 @@ export function getConsolePath(roleType: RoleType): string {
       return "/org";
     case "consultant":
       return "/consultant";
+    case "collaborator":
+      return "/consultant";
     case "partner":
-      return "/partner";
     case "employee":
     case "client":
     case "individual":
@@ -174,7 +184,7 @@ export function getConsolePath(roleType: RoleType): string {
 
 // Check if a role has console access (i.e. a management workspace)
 export function isConsoleRoleType(roleType: RoleType): boolean {
-  return ["super_admin", "org_admin", "hr", "department_manager", "consultant", "partner"].includes(roleType);
+  return ["super_admin", "org_admin", "hr", "department_manager", "consultant", "collaborator"].includes(roleType);
 }
 
 // Find the best console path from profile, checking both role_type and additional_roles
@@ -263,7 +273,7 @@ export function getPermissionLabel(module: PermissionModule, language: "zh-CN" |
     user_password_reset: { "zh-CN": "重置密码", "zh-TW": "重設密碼", en: "Reset Password" },
     assessments: { "zh-CN": "测评管理", "zh-TW": "測評管理", en: "Assessments" },
     assessment_assign: { "zh-CN": "分配测评", "zh-TW": "分配測評", en: "Assign Assessments" },
-    analytics: { "zh-CN": "数据分析", "zh-TW": "數據分析", en: "Analytics" },
+    analytics: { "zh-CN": "数据分析", "zh-TW": "資料分析", en: "Analytics" },
     reports: { "zh-CN": "报告查看", "zh-TW": "報告查看", en: "View Reports" },
     report_export: { "zh-CN": "导出报告", "zh-TW": "匯出報告", en: "Export Reports" },
     question_bank: { "zh-CN": "题库查看", "zh-TW": "題庫查看", en: "Question Bank" },
@@ -291,12 +301,13 @@ export function getRoleDescription(roleType: RoleType, language: "zh-CN" | "zh-T
     super_admin: { "zh-CN": "拥有平台最高权限，可管理所有机构、用户、系统配置和审计日志", "zh-TW": "擁有平台最高權限，可管理所有機構、使用者、系統配置和審計日誌", en: "Full platform access including organizations, users, system config, and audit logs" },
     org_admin: { "zh-CN": "机构最高管理员，可管理机构内所有用户、部门、测评和报告", "zh-TW": "機構最高管理員，可管理機構內所有使用者、部門、測評和報告", en: "Top organization admin managing all users, departments, assessments, and reports within the org" },
     hr: { "zh-CN": "人力资源角色，可创建用户、分配测评、查看分析和导出报告", "zh-TW": "人力資源角色，可建立使用者、分配測評、查看分析和匯出報告", en: "HR role for creating users, assigning assessments, viewing analytics, and exporting reports" },
-    department_manager: { "zh-CN": "部门主管，可查看部门成员、测评结果和数据分析", "zh-TW": "部門主管，可查看部門成員、測評結果和數據分析", en: "Department head with access to team members, assessment results, and analytics" },
+    department_manager: { "zh-CN": "部门主管，可查看部门成员、测评结果和数据分析", "zh-TW": "部門主管，可查看部門成員、測評結果和資料分析", en: "Department head with access to team members, assessment results, and analytics" },
     employee: { "zh-CN": "普通员工，可参与测评并查看自己的报告", "zh-TW": "普通員工，可參與測評並查看自己的報告", en: "Regular employee who can take assessments and view their own reports" },
     consultant: { "zh-CN": "职业咨询师，可管理客户、分配测评、写咨询笔记和导出报告", "zh-TW": "職業諮詢師，可管理客戶、分配測評、寫諮詢筆記和匯出報告", en: "Career consultant managing clients, assigning assessments, writing notes, and exporting reports" },
     client: { "zh-CN": "咨询客户，可参与测评并查看报告", "zh-TW": "諮詢客戶，可參與測評並查看報告", en: "Consulting client who takes assessments and views reports" },
     individual: { "zh-CN": "个人用户，自主参与测评并查看结果", "zh-TW": "個人使用者，自主參與測評並查看結果", en: "Individual user who takes assessments independently and views their results" },
-    partner: { "zh-CN": "产品合作方，可提交产品、查看销售数据和收入报表", "zh-TW": "產品合作方，可提交產品、查看銷售數據和收入報表", en: "Product partner who can submit products, view sales data, and track revenue" },
+    collaborator: { "zh-CN": "合作者，可协助咨询师查看测评数据、客户报告和分析结果", "zh-TW": "合作者，可協助諨詢師查看測評數據、客戶報告和分析結果", en: "Collaborator who assists consultants with viewing assessment data, client reports, and analysis results" },
+    partner: { "zh-CN": "产品合作方，可查看仪表盘和报告数据", "zh-TW": "產品合作方，可查看儀表盤和報告數據", en: "Product partner with access to dashboard and reports" },
   };
   return descriptions[roleType]?.[language] ?? "";
 }
@@ -305,7 +316,7 @@ export function getRoleDescription(roleType: RoleType, language: "zh-CN" | "zh-T
 export function getCreatableRoles(creatorRole: RoleType): RoleType[] {
   switch (creatorRole) {
     case "super_admin":
-      return ["org_admin", "hr", "department_manager", "employee", "consultant", "client", "individual"];
+      return ["super_admin", "org_admin", "hr", "department_manager", "employee", "consultant", "collaborator", "client", "individual", "partner"];
     case "org_admin":
       return ["hr", "department_manager", "employee"];
     case "hr":

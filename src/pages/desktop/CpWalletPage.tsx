@@ -23,6 +23,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCpWallet } from "@/hooks/useCpWallet";
 import CpTransactionHistory from "@/components/desktop/CpTransactionHistory";
 import { cn } from "@/lib/utils";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { Navigate } from "react-router-dom";
 
 const TXT = {
   en: {
@@ -78,20 +80,20 @@ const TXT = {
     breadcrumbHome: "首頁",
     breadcrumbWallet: "CP 帳戶",
     totalBalance: "當前可用生涯點",
-    paidBalance: "充值購買",
-    bonusBalance: "充值贈送",
+    paidBalance: "儲值購買",
+    bonusBalance: "儲值贈送",
     activityBalance: "活動獎勵",
     monthlyConsumed: "本月累計消費",
-    monthlyRecharged: "本月累計充值",
-    recharge: "立即充值",
+    monthlyRecharged: "本月累計儲值",
+    recharge: "立即儲值",
     applyRefund: "申請退費",
     browseServices: "瀏覽可購買服務",
     cpUnit: "CP",
     sourceTitle: "來源分類餘額",
-    paidCpTitle: "充值購買 CP",
+    paidCpTitle: "儲值購買 CP",
     paidCpDesc: "用戶以真實貨幣購買，可申請退費",
-    bonusCpTitle: "充值贈送 CP",
-    bonusCpDesc: "充值時系統贈送，不可退費",
+    bonusCpTitle: "儲值贈送 CP",
+    bonusCpDesc: "儲值時系統贈送，不可退費",
     activityCpTitle: "活動獎勵 CP",
     activityCpDesc: "推薦、活動等獎勵獲得，不可退費",
     currentBalance: "當前餘額",
@@ -101,8 +103,8 @@ const TXT = {
     consumptionTitle: "消費情況",
     bySource: "按扣點來源拆分",
     byCategory: "按消費品類",
-    fromPaid: "充值購買扣除",
-    fromBonus: "充值贈送扣除",
+    fromPaid: "儲值購買扣除",
+    fromBonus: "儲值贈送扣除",
     fromActivity: "活動獎勵扣除",
     catAssessment: "測評",
     catReport: "報告",
@@ -167,6 +169,7 @@ export default function CpWalletPage() {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const { user } = useAuth();
+  const { isCpPointsEnabled } = useFeaturePermissions();
   const {
     wallet,
     transactions,
@@ -177,6 +180,11 @@ export default function CpWalletPage() {
   } = useCpWallet();
 
   const t = TXT[language] || TXT["zh-TW"];
+
+  // CP feature disabled for this org — redirect to home
+  if (!isCpPointsEnabled) {
+    return <Navigate to="/" replace />;
+  }
 
   // Not logged in
   if (!user) {

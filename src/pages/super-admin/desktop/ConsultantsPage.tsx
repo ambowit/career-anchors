@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Plus, UserCog, Eye, Edit, Trash2, Loader2, X, Save } from "lucide-react";
+import { Search, Plus, UserCog, Eye, ShieldCheck, Loader2, X, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/hooks/useLanguage";
 import { useConsultants, useOrganizationsWithCounts } from "@/hooks/useAdminData";
@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-type ModalMode = "add" | "edit" | "view" | null;
+type ModalMode = "add" | "view" | null;
 
 interface CreateConsultantForm {
   fullName: string;
@@ -16,6 +16,20 @@ interface CreateConsultantForm {
   phone: string;
   organizationId: string;
 }
+
+const FEATURE_KEYS = [
+  { key: "career_anchor", labelEn: "Career Anchor", labelZhTw: "職業錨測評", labelZhCn: "职业锚测评" },
+  { key: "ideal_card", labelEn: "Espresso Card", labelZhTw: "理想人生卡", labelZhCn: "理想人生卡" },
+  { key: "combined", labelEn: "Integration Assessment", labelZhTw: "整合測評", labelZhCn: "整合测评" },
+  { key: "report_download", labelEn: "Report Download", labelZhTw: "報告下載", labelZhCn: "报告下载" },
+  { key: "analytics", labelEn: "Analytics", labelZhTw: "資料分析", labelZhCn: "数据分析" },
+  { key: "client_management", labelEn: "Client Management", labelZhTw: "客戶管理", labelZhCn: "客户管理" },
+  { key: "consultant_notes", labelEn: "Consultant Notes", labelZhTw: "諮詢筆記", labelZhCn: "咨询笔记" },
+  { key: "trend_analysis", labelEn: "Trend Analysis", labelZhTw: "趨勢分析", labelZhCn: "趋势分析" },
+  { key: "certification", labelEn: "Certification", labelZhTw: "認證管理", labelZhCn: "认证管理" },
+  { key: "cdu_records", labelEn: "CDU Records", labelZhTw: "CDU 記錄", labelZhCn: "CDU 记录" },
+  { key: "message", labelEn: "Messaging", labelZhTw: "訊息功能", labelZhCn: "消息功能" },
+] as const;
 
 export default function ConsultantsPage() {
   const { language } = useTranslation();
@@ -31,6 +45,12 @@ export default function ConsultantsPage() {
   });
   const [isCreating, setIsCreating] = useState(false);
   const [viewingConsultant, setViewingConsultant] = useState<any>(null);
+
+  // Permission editing state
+  const [permEditingConsultant, setPermEditingConsultant] = useState<any>(null);
+  const [permModalOpen, setPermModalOpen] = useState(false);
+  const [permFormData, setPermFormData] = useState<Record<string, boolean>>({});
+  const [isSavingPerms, setIsSavingPerms] = useState(false);
 
   const dataList = consultants || [];
 
@@ -79,6 +99,41 @@ export default function ConsultantsPage() {
     }
   };
 
+  const openPermissionsModal = (consultant: any) => {
+    const existingPerms = (consultant.feature_permissions as Record<string, boolean>) || {};
+    const initialPerms: Record<string, boolean> = {};
+    for (const featureKey of FEATURE_KEYS) {
+      initialPerms[featureKey.key] = existingPerms[featureKey.key] === true;
+    }
+    setPermEditingConsultant(consultant);
+    setPermFormData(initialPerms);
+    setPermModalOpen(true);
+  };
+
+  const handleSavePermissions = async () => {
+    if (!permEditingConsultant) return;
+    setIsSavingPerms(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ feature_permissions: permFormData })
+        .eq("id", permEditingConsultant.id);
+      if (error) throw error;
+      toast.success(
+        language === "en" ? "Permissions updated" : language === "zh-TW" ? "權限已更新" : "权限已更新"
+      );
+      queryClient.invalidateQueries({ queryKey: ["admin", "consultants"] });
+      setPermModalOpen(false);
+      setPermEditingConsultant(null);
+    } catch {
+      toast.error(
+        language === "en" ? "Failed to update permissions" : language === "zh-TW" ? "更新權限失敗" : "更新权限失败"
+      );
+    } finally {
+      setIsSavingPerms(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -110,7 +165,7 @@ export default function ConsultantsPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
         <div className="bg-card border border-border rounded-lg p-4">
           <div className="text-2xl font-bold text-foreground">{dataList.length}</div>
           <div className="text-xs text-muted-foreground">{language === "en" ? "Total Consultants" : language === "zh-TW" ? "諮詢師總數" : "咨询师总数"}</div>
@@ -194,6 +249,13 @@ export default function ConsultantsPage() {
                       title={language === "en" ? "View" : language === "zh-TW" ? "查看" : "查看"}
                     >
                       <Eye className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                    <button
+                      onClick={() => openPermissionsModal(consultant)}
+                      className="p-1.5 hover:bg-muted/20 rounded-lg"
+                      title={language === "en" ? "Edit Permissions" : language === "zh-TW" ? "編輯權限" : "编辑权限"}
+                    >
+                      <ShieldCheck className="w-4 h-4 text-muted-foreground" />
                     </button>
                   </div>
                 </td>
@@ -298,6 +360,94 @@ export default function ConsultantsPage() {
                   {isCreating
                     ? (language === "en" ? "Creating..." : language === "zh-TW" ? "建立中..." : "创建中...")
                     : (language === "en" ? "Create" : language === "zh-TW" ? "建立" : "创建")}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Permissions Modal */}
+      <AnimatePresence>
+        {permModalOpen && permEditingConsultant && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => { setPermModalOpen(false); setPermEditingConsultant(null); }}
+          >
+            <motion.div
+              initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
+              className="bg-card border border-border rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">
+                    {language === "en" ? "Edit Permissions" : language === "zh-TW" ? "編輯權限" : "编辑权限"}
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {permEditingConsultant.full_name || permEditingConsultant.email}
+                  </p>
+                </div>
+                <button onClick={() => { setPermModalOpen(false); setPermEditingConsultant(null); }}>
+                  <X className="w-5 h-5 text-muted-foreground" />
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                {language === "en"
+                  ? "Control which features this consultant can access"
+                  : language === "zh-TW"
+                  ? "控制該諮詢師可使用的功能"
+                  : "控制该咨询师可使用的功能"}
+              </p>
+              <div className="space-y-1.5">
+                {FEATURE_KEYS.map((featureKey) => (
+                  <label
+                    key={featureKey.key}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg border border-border hover:bg-muted/10 transition-colors cursor-pointer"
+                  >
+                    <span className="text-sm text-foreground">
+                      {language === "en" ? featureKey.labelEn : language === "zh-TW" ? featureKey.labelZhTw : featureKey.labelZhCn}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPermFormData({
+                          ...permFormData,
+                          [featureKey.key]: !permFormData[featureKey.key],
+                        })
+                      }
+                      className={cn(
+                        "relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0",
+                        permFormData[featureKey.key] ? "bg-green-500" : "bg-muted"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm",
+                          permFormData[featureKey.key] ? "translate-x-[18px]" : "translate-x-[3px]"
+                        )}
+                      />
+                    </button>
+                  </label>
+                ))}
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => { setPermModalOpen(false); setPermEditingConsultant(null); }}
+                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  {language === "en" ? "Cancel" : language === "zh-TW" ? "取消" : "取消"}
+                </button>
+                <button
+                  onClick={handleSavePermissions}
+                  disabled={isSavingPerms}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-red-500 hover:bg-red-600 text-white rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  {isSavingPerms ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {isSavingPerms
+                    ? (language === "en" ? "Saving..." : language === "zh-TW" ? "儲存中..." : "保存中...")
+                    : (language === "en" ? "Save" : language === "zh-TW" ? "儲存" : "保存")}
                 </button>
               </div>
             </motion.div>

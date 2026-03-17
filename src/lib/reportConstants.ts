@@ -14,8 +14,8 @@ export const ANCHOR_TYPES: { code: string; label: LangMap }[] = [
 
 export const SECTION_TYPES: { code: string; label: LangMap }[] = [
   { code: "anchor_explanation", label: { en: "Anchor Explanation", "zh-TW": "錨點解釋", "zh-CN": "锚点解释" } },
-  { code: "career_advice", label: { en: "Career Advice", "zh-TW": "職涯發展建議", "zh-CN": "职涯发展建议" } },
-  { code: "risk_warning", label: { en: "Risk Warning", "zh-TW": "風險提醒", "zh-CN": "风险提醒" } },
+  { code: "career_advice", label: { en: "Core Interpretation Framework", "zh-TW": "核心詮釋框架", "zh-CN": "核心诠释框架" } },
+  { code: "risk_warning", label: { en: "Anchor Development Imbalance Risk", "zh-TW": "錨點發展失衡風險", "zh-CN": "锚点发展失衡风隩" } },
   { code: "development_path", label: { en: "Development Path", "zh-TW": "適合發展路徑", "zh-CN": "适合发展路径" } },
 ];
 
@@ -42,21 +42,21 @@ export const TIERS: { code: string; label: LangMap }[] = [
 export const DEFAULT_SCORE_RANGES = [
   {
     score_min: 80, score_max: 100, sort_order: 1,
-    range_label_en: "Non-negotiable identity anchor",
-    range_label_zh_tw: "不可妥協的身份錨點",
-    range_label_zh_cn: "不可妥协的身份锚点",
-    range_description_en: "Non-negotiable identity anchor",
-    range_description_zh_tw: "不可妥協的身份錨點",
-    range_description_zh_cn: "不可妥协的身份锚点",
+    range_label_en: "Core Strength Anchor",
+    range_label_zh_tw: "核心優勢錨點",
+    range_label_zh_cn: "核心优势锚点",
+    range_description_en: "Core Strength Anchor",
+    range_description_zh_tw: "核心優勢錨點",
+    range_description_zh_cn: "核心优势锚点",
   },
   {
     score_min: 65, score_max: 79, sort_order: 2,
-    range_label_en: "High sensitivity; sustainable only short-term compromise",
-    range_label_zh_tw: "高敏感度；僅能短期妥協",
-    range_label_zh_cn: "高敏感度；仅能短期妥协",
-    range_description_en: "High sensitivity; sustainable only short-term compromise",
-    range_description_zh_tw: "高敏感度；僅能短期妥協",
-    range_description_zh_cn: "高敏感度；仅能短期妥协",
+    range_label_en: "High sensitivity; sustainable development",
+    range_label_zh_tw: "高敏感度；可以持續發展",
+    range_label_zh_cn: "高敏感度；可以持续发展",
+    range_description_en: "High sensitivity; sustainable development",
+    range_description_zh_tw: "高敏感度；可以持續發展",
+    range_description_zh_cn: "高敏感度；可以持续发展",
   },
   {
     score_min: 45, score_max: 64, sort_order: 3,
@@ -98,14 +98,15 @@ export function getTierLabel(code: string, lang: string): string {
 
 export const CAREER_STAGES: { code: string; label: LangMap }[] = [
   { code: "entry", label: { en: "Early Career", "zh-TW": "職場新人", "zh-CN": "职场新人" } },
-  { code: "mid", label: { en: "Mid Career", "zh-TW": "職場中期", "zh-CN": "职场中期" } },
-  { code: "senior", label: { en: "Senior Career", "zh-TW": "職場資深", "zh-CN": "职场资深" } },
-  { code: "executive", label: { en: "Executive / Entrepreneur", "zh-TW": "高管/創業者", "zh-CN": "高管/创业者" } },
+  { code: "mid", label: { en: "Mid-Early Career", "zh-TW": "職涯中前期", "zh-CN": "职涯中前期" } },
+  { code: "senior", label: { en: "Mid-Late Career", "zh-TW": "職涯中後期", "zh-CN": "职涯中后期" } },
+  { code: "executive", label: { en: "Senior Executive", "zh-TW": "高階管理者", "zh-CN": "高阶管理者" } },
+  { code: "entrepreneur", label: { en: "Entrepreneur", "zh-TW": "創業者", "zh-CN": "创业者" } },
 ];
 
 export const ASSESSMENT_CATEGORIES: { code: string; label: LangMap; color: string }[] = [
   { code: "CAREER_ANCHOR", label: { en: "Career Anchor", "zh-TW": "職業錨", "zh-CN": "职业锚" }, color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-  { code: "LIFE_CARD", label: { en: "Ideal Life Card", "zh-TW": "理想人生卡", "zh-CN": "理想人生卡" }, color: "bg-rose-50 text-rose-700 border-rose-200" },
+  { code: "LIFE_CARD", label: { en: "Espresso Card", "zh-TW": "理想人生卡", "zh-CN": "理想人生卡" }, color: "bg-rose-50 text-rose-700 border-rose-200" },
   { code: "COMBINED", label: { en: "Combined", "zh-TW": "綜合", "zh-CN": "综合" }, color: "bg-violet-50 text-violet-700 border-violet-200" },
 ];
 

@@ -5,7 +5,7 @@ import { useTranslation } from "@/hooks/useLanguage";
 import { useOrgAnalytics, useOrgDepartments } from "@/hooks/useAdminData";
 import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
-import { generateAnalyticsCSV, downloadCSV } from "@/lib/exportReport";
+import { generateAnalyticsXLS, downloadXLS } from "@/lib/exportReport";
 import { toast } from "sonner";
 
 const ANCHOR_COLORS: Record<string, string> = {
@@ -33,13 +33,23 @@ export default function OrgAnalyticsPage() {
       .from("assessment_results")
       .select("*")
       .eq("organization_id", organizationId);
-    setExporting(false);
     if (error) {
+      setExporting(false);
       toast.error(language === "en" ? "Export failed" : language === "zh-TW" ? "匯出失敗" : "导出失败");
       return;
     }
-    const csvContent = generateAnalyticsCSV(results || [], language);
-    downloadCSV(csvContent, `org-analytics-${new Date().toISOString().slice(0, 10)}.csv`);
+    // Fetch user profiles for readable names
+    const userIds = [...new Set((results || []).map((r) => r.user_id))];
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", userIds);
+    const userMap = Object.fromEntries(
+      (profilesData || []).map((p) => [p.id, { full_name: p.full_name || "", email: p.email || "" }])
+    );
+    setExporting(false);
+    const xlsContent = generateAnalyticsXLS(results || [], language, userMap);
+    downloadXLS(xlsContent, `org-analytics-${new Date().toISOString().slice(0, 10)}.xls`);
     toast.success(language === "en" ? "Report exported" : language === "zh-TW" ? "報告已匯出" : "报告已导出");
   };
 
@@ -68,13 +78,14 @@ export default function OrgAnalyticsPage() {
   const topAnchorKey = analytics?.topAnchor || null;
   const avgRisk = analytics?.avgRisk || "0";
 
-  const topLevelDepts = (departments || []).filter((department) => !department.parent_department_id);
+  const allDepts = departments || [];
+  const topLevelDepts = allDepts.filter((department) => !department.parent_department_id);
 
   const stats = [
     { label: language === "en" ? "Total Assessments" : language === "zh-TW" ? "總測評數" : "总测评数", value: String(totalAssessments), icon: BarChart3, color: "#3b82f6" },
     { label: language === "en" ? "Anchor Types" : language === "zh-TW" ? "錨點類型數" : "锚点类型数", value: String(anchorDistribution.length), icon: Compass, color: "#10b981" },
     { label: language === "en" ? "Top Anchor" : language === "zh-TW" ? "最常見錨點" : "最常见锚点", value: topAnchorKey ? (anchorLabels[topAnchorKey] || topAnchorKey) : "—", icon: PieChart, color: "#8b5cf6" },
-    { label: language === "en" ? "Avg. Risk" : language === "zh-TW" ? "平均風險指數" : "平均风险指数", value: `${avgRisk}%`, icon: TrendingUp, color: "#f59e0b" },
+    { label: language === "en" ? "Avg. Clarity" : language === "zh-TW" ? "平均錨定清晰度" : "平均锚定清晰度", value: `${avgRisk}%`, icon: TrendingUp, color: "#f59e0b" },
   ];
 
   const maxTrend = Math.max(...monthlyTrend.map((monthItem) => monthItem.completed), 1);
@@ -83,7 +94,7 @@ export default function OrgAnalyticsPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-foreground mb-1">{language === "en" ? "Organization Analytics" : language === "zh-TW" ? "機構數據分析" : "机构数据分析"}</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-1">{language === "en" ? "Organization Analytics" : language === "zh-TW" ? "機構資料分析" : "机构数据分析"}</h1>
           <p className="text-sm text-muted-foreground">{language === "en" ? "Comprehensive assessment data insights for your organization" : language === "zh-TW" ? "機構測評數據洞察與分析" : "机构测评数据洞察与分析"}</p>
         </div>
         <button onClick={handleExport} disabled={exporting} className="flex items-center gap-2 px-4 py-2 bg-sky-500 text-white rounded-lg text-sm font-medium hover:bg-sky-600 disabled:opacity-60 transition-colors">
@@ -92,7 +103,7 @@ export default function OrgAnalyticsPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-4 gap-5 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-5 mb-8">
         {stats.map((stat, index) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.08 }} className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-start justify-between mb-3">
@@ -190,8 +201,10 @@ export default function OrgAnalyticsPage() {
             </thead>
             <tbody>
               {topLevelDepts.map((dept) => {
-                const memberCount = dept.memberCount || 0;
-                const completedCount = dept.completedAssessments || 0;
+                // Aggregate: include child (sub) department members
+                const childDepts = allDepts.filter((child) => child.parent_department_id === dept.id);
+                const memberCount = (dept.memberCount || 0) + childDepts.reduce((sum, child) => sum + (child.memberCount || 0), 0);
+                const completedCount = (dept.completedAssessments || 0) + childDepts.reduce((sum, child) => sum + (child.completedAssessments || 0), 0);
                 const rate = memberCount > 0 ? Math.round((completedCount / memberCount) * 100) : 0;
                 return (
                   <tr key={dept.id} className="border-b border-border/50 last:border-0 hover:bg-muted/5 transition-colors">

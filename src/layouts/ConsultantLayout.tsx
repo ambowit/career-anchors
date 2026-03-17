@@ -27,6 +27,8 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import LanguageSwitcher from "@/components/desktop/LanguageSwitcher";
 import RoleSwitcher from "@/components/desktop/RoleSwitcher";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useFeaturePermissions, type FeatureKey } from "@/hooks/useFeaturePermissions";
+import { useOrgInfo } from "@/hooks/useAdminData";
 
 const SCPC_LOGO = "https://b.ux-cdn.com/uxarts/20260226/1eeac3700a3d4b41ad6120512fa02969.png";
 
@@ -38,6 +40,10 @@ export default function ConsultantLayout() {
   const { isCollapsed, toggleCollapse } = useSidebarCollapse();
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { hasFeature } = useFeaturePermissions();
+  const { data: orgInfo } = useOrgInfo();
+  const orgLogoUrl = orgInfo?.logo_url || "";
+  const orgDisplayName = orgInfo?.name || "";
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -54,19 +60,21 @@ export default function ConsultantLayout() {
     return () => { document.body.style.overflow = ""; };
   }, [mobileMenuOpen, isMobile]);
 
-  const navItems = [
+  const allNavItems: Array<{ path: string; icon: React.ElementType; label: string; end?: boolean; featureKey?: FeatureKey }> = [
     { path: "/consultant", icon: LayoutDashboard, label: language === "en" ? "Dashboard" : language === "zh-TW" ? "儀表板" : "仪表盘", end: true },
-    { path: "/consultant/clients", icon: Users, label: language === "en" ? "Clients" : language === "zh-TW" ? "客戶管理" : "客户管理" },
+    { path: "/consultant/clients", icon: Users, label: language === "en" ? "Clients" : language === "zh-TW" ? "客戶管理" : "客户管理", featureKey: "client_management" },
     { path: "/consultant/assessments", icon: ClipboardList, label: language === "en" ? "Assessments" : language === "zh-TW" ? "測評派發" : "测评派发" },
     { path: "/consultant/reports", icon: FileText, label: language === "en" ? "Reports" : language === "zh-TW" ? "報告管理" : "报告管理" },
-    { path: "/consultant/notes", icon: StickyNote, label: language === "en" ? "Notes" : language === "zh-TW" ? "諮詢備註" : "咨询备注" },
-    { path: "/consultant/trends", icon: TrendingUp, label: language === "en" ? "Trends" : language === "zh-TW" ? "趨勢分析" : "趋势分析" },
-    { path: "/consultant/messages", icon: MessageCircle, label: language === "en" ? "Messages" : language === "zh-TW" ? "訊息中心" : "消息中心" },
-    { path: "/consultant/my-certification", icon: Award, label: language === "en" ? "My Certification" : language === "zh-TW" ? "我的認證" : "我的认证" },
-    { path: "/consultant/certification-apply", icon: FileText, label: language === "en" ? "Apply Certification" : language === "zh-TW" ? "認證申請" : "认证申请" },
-    { path: "/consultant/cdu-records", icon: BookOpen, label: language === "en" ? "CDU Records" : language === "zh-TW" ? "CDU 記錄" : "CDU 记录" },
-    { path: "/consultant/renewal", icon: RefreshCw, label: language === "en" ? "Renewal Status" : language === "zh-TW" ? "換證狀態" : "换证状态" },
+    { path: "/consultant/notes", icon: StickyNote, label: language === "en" ? "Notes" : language === "zh-TW" ? "諮詢備註" : "咨询备注", featureKey: "consultant_notes" },
+    { path: "/consultant/trends", icon: TrendingUp, label: language === "en" ? "Trends" : language === "zh-TW" ? "趨勢分析" : "趋势分析", featureKey: "trend_analysis" },
+    { path: "/consultant/messages", icon: MessageCircle, label: language === "en" ? "Messages" : language === "zh-TW" ? "訊息中心" : "消息中心", featureKey: "message" },
+    { path: "/consultant/my-certification", icon: Award, label: language === "en" ? "My Certification" : language === "zh-TW" ? "我的認證" : "我的认证", featureKey: "certification" },
+    { path: "/consultant/certification-apply", icon: FileText, label: language === "en" ? "Apply Certification" : language === "zh-TW" ? "認證申請" : "认证申请", featureKey: "certification" },
+    { path: "/consultant/cdu-records", icon: BookOpen, label: language === "en" ? "CDU Records" : language === "zh-TW" ? "CDU 記錄" : "CDU 记录", featureKey: "cdu_records" },
+    { path: "/consultant/renewal", icon: RefreshCw, label: language === "en" ? "Renewal Status" : language === "zh-TW" ? "換證狀態" : "换证状态", featureKey: "certification" },
   ];
+
+  const navItems = allNavItems.filter((item) => !item.featureKey || hasFeature(item.featureKey));
 
   const handleLogout = async () => {
     await signOut();
@@ -119,11 +127,19 @@ export default function ConsultantLayout() {
           <>
             <Link to="/" className="flex items-center gap-3">
               <img src={SCPC_LOGO} alt="SCPC" className="h-8 w-8 rounded object-contain" />
-              <div className="flex items-center gap-2">
-                <span className="text-white font-bold text-base tracking-tight">SCPC</span>
-                <span className="text-[10px] text-emerald-400 font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 whitespace-nowrap">
-                  {language === "en" ? "Consultant" : language === "zh-TW" ? "諮詢師" : "咨询师"}
-                </span>
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white font-bold text-base tracking-tight">SCPC</span>
+                  <span className="text-[10px] text-emerald-400 font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 whitespace-nowrap">
+                    {language === "en" ? "Consultant" : language === "zh-TW" ? "諮詢師" : "咨询师"}
+                  </span>
+                </div>
+                {orgDisplayName && (
+                  <div className="flex items-center gap-1 mt-0.5">
+                    {orgLogoUrl && <img src={orgLogoUrl} alt="" className="h-3.5 w-3.5 rounded object-contain flex-shrink-0" />}
+                    <span className="text-sky-200/80 text-[10px] font-medium truncate max-w-[120px]">{orgDisplayName}</span>
+                  </div>
+                )}
               </div>
             </Link>
             <button
@@ -141,11 +157,19 @@ export default function ConsultantLayout() {
             )}>
               <img src={SCPC_LOGO} alt="SCPC" className="h-8 w-8 rounded object-contain flex-shrink-0" />
               {!isCollapsed && (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-white font-bold text-base tracking-tight">SCPC</span>
-                  <span className="text-[10px] text-emerald-400 font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 whitespace-nowrap">
-                    {language === "en" ? "Consultant" : language === "zh-TW" ? "諮詢師" : "咨询师"}
-                  </span>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-white font-bold text-base tracking-tight">SCPC</span>
+                    <span className="text-[10px] text-emerald-400 font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 whitespace-nowrap">
+                      {language === "en" ? "Consultant" : language === "zh-TW" ? "諮詢師" : "咨询师"}
+                    </span>
+                  </div>
+                  {orgDisplayName && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {orgLogoUrl && <img src={orgLogoUrl} alt="" className="h-3.5 w-3.5 rounded object-contain flex-shrink-0" />}
+                      <span className="text-sky-200/80 text-[10px] font-medium truncate max-w-[120px]">{orgDisplayName}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </Link>
@@ -278,7 +302,7 @@ export default function ConsultantLayout() {
         {/* Top bar */}
         <div className={cn(
           "flex items-center justify-between border-b border-slate-200 bg-white sticky top-0 z-10",
-          isMobile ? "h-14 px-4" : "h-16 px-8"
+          isMobile ? "h-14 px-4 pt-[env(safe-area-inset-top)]" : "h-16 px-8"
         )}>
           <div className="flex items-center gap-3">
             {isMobile && (
@@ -294,9 +318,19 @@ export default function ConsultantLayout() {
               {language === "en" ? "Consultant Console" : language === "zh-TW" ? "諮詢師控制台" : "咨询师控制台"}
             </span>
           </div>
-          <LanguageSwitcher />
+          <div className="flex items-center gap-2">
+            {isMobile && (
+              <button
+                onClick={() => navigate("/")}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 transition-colors"
+              >
+                {language === "en" ? "User Mode" : language === "zh-TW" ? "使用者" : "使用者"}
+              </button>
+            )}
+            <LanguageSwitcher />
+          </div>
         </div>
-        <div className={cn(isMobile ? "p-4" : "p-8")}>
+        <div className={cn("admin-page-content", isMobile ? "p-4 overflow-x-auto" : "p-8")}>
           <Outlet />
         </div>
       </main>

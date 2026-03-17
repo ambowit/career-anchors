@@ -134,38 +134,15 @@ export default function AdminQuestionsPage() {
     if (!file) return;
 
     setIsImporting(true);
-    
-    setTimeout(() => {
-      const mockImportedQuestions: QuestionData[] = [
-        {
-          id: `Q${String(questions.length + 1).padStart(3, "0")}`,
-          text: {
-            "zh-CN": "导入题目：你更倾向于哪种工作方式？",
-            "zh-TW": "匯入題目：你更傾向於哪種工作方式？",
-            "en": "Imported question: Which work style do you prefer?",
-          },
-          type: "forced_choice",
-          dimension: "AU",
-          status: "draft",
-          responses: 0,
-          avgTime: "-",
-          options: {
-            "zh-CN": ["独立完成任务", "团队协作完成"],
-            "zh-TW": ["獨立完成任務", "團隊協作完成"],
-            "en": ["Complete tasks independently", "Work collaboratively"],
-          },
-        },
-      ];
-      
-      setQuestions([...mockImportedQuestions, ...questions]);
-      setIsImporting(false);
-      setShowImportModal(false);
-      toast.success(t("admin.importQuestionsSuccess", { count: mockImportedQuestions.length }));
-      
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }, 1500);
+
+    // TODO: Implement real CSV parsing and question import
+    toast.info(language === "en" ? "CSV import coming soon" : language === "zh-TW" ? "CSV 匯入功能即將推出" : "CSV 导入功能即将推出");
+    setIsImporting(false);
+    setShowImportModal(false);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleDownloadTemplate = () => {

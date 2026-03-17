@@ -48,7 +48,7 @@ export default function ConsultantDashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-4 gap-5 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-5 mb-8">
         {stats.map((stat, index) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.08 }} className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-start justify-between mb-3">
@@ -67,9 +67,9 @@ export default function ConsultantDashboardPage() {
         <CertificationInfoCard langKey={langKey} />
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
         {/* Recent Assessments */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="col-span-2 bg-card border border-border rounded-xl p-6">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="sm:col-span-2 bg-card border border-border rounded-xl p-4 sm:p-6">
           <div className="flex items-center gap-2 mb-5">
             <ClipboardList className="w-4 h-4 text-muted-foreground" />
             <h3 className="font-semibold text-foreground text-sm">

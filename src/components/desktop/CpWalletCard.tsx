@@ -44,8 +44,8 @@ const TXT = {
     activityCp: "活動 CP",
     memberTier: "會員等級",
     noWallet: "尚未開通錢包",
-    noWalletDesc: "充值即可啟用 CP 錢包",
-    recharge: "立即充值",
+    noWalletDesc: "儲值即可啟用 CP 錢包",
+    recharge: "立即儲值",
     nextTier: "下一等級",
     progressTo: "至",
     discount: "折扣",
@@ -53,7 +53,7 @@ const TXT = {
     cpUnit: "CP（生涯點）",
     viewAll: "查看明細",
     maxTier: "最高等級",
-    rolling12m: "近 12 月充值",
+    rolling12m: "近 12 月儲值",
   },
   "zh-CN": {
     walletTitle: "CP 钱包",
@@ -163,7 +163,7 @@ export default function CpWalletCard({
                     <span className="text-lg">{currentTier.icon_emoji}</span>
                     <span className="text-sm font-semibold">{getTierName(currentTier, language)}</span>
                     {currentTier.discount_rate < 1 && (
-                      <Badge variant="outline" className="border-white/30 text-white/90 text-[10px] px-1.5 py-0">
+                      <Badge variant="outline" className="border-white/30 text-white/90 text-[10px] px-1.5 h-5">
                         {getDiscountLabel(currentTier.discount_rate, language)}
                       </Badge>
                     )}

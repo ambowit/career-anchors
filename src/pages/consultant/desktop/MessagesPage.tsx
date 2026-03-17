@@ -173,7 +173,7 @@ export default function ConsultantMessagesPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
         {[
           { label: isEn ? "Total Inbox" : "收件箱", value: inbox.length, icon: Inbox, color: "text-blue-600", bg: "bg-blue-50" },
           { label: isEn ? "Unread" : "未读", value: unreadCount, icon: Mail, color: "text-red-600", bg: "bg-red-50" },

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Target, Zap, AlertTriangle, Share2, ChevronRight, Download } from "lucide-react";
-import { DIMENSIONS, type AssessmentResult, getHighSensitivityAnchors } from "@/hooks/useAssessment";
-import ShareDialog from "@/components/desktop/ShareDialog";
+import { ArrowRight, Target, AlertTriangle, ChevronRight } from "lucide-react";
+import { DIMENSIONS, type AssessmentResult, getCoreAdvantageAnchors } from "@/hooks/useAssessment";
+
 import { useTranslation } from "@/hooks/useLanguage";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +11,6 @@ export default function MobileResultsPage() {
   const navigate = useNavigate();
   const { language, t } = useTranslation();
   const [results, setResults] = useState<AssessmentResult | null>(null);
-  const [hasIdealCards, setHasIdealCards] = useState(false);
 
   // Helper to get localized dimension name
   const getDimensionName = (dim: string) => {
@@ -20,40 +19,21 @@ export default function MobileResultsPage() {
 
   useEffect(() => {
     const stored = sessionStorage.getItem("assessmentResults");
-    const idealCards = sessionStorage.getItem("idealCardResults");
-    setHasIdealCards(!!idealCards && idealCards !== "[]");
     if (stored) {
       setResults(JSON.parse(stored));
     } else {
-      // Demo data for preview (standardized 0-100)
-      setResults({
-        scores: {
-          TF: 82,
-          GM: 45,
-          AU: 75,
-          SE: 35,
-          EC: 68,
-          SV: 55,
-          CH: 70,
-          LS: 48,
-        },
-        mainAnchor: "TF",
-        highSensitivityAnchors: ["TF"],
-        conflictAnchors: ["AU", "SE"],
-        riskIndex: 42,
-        stability: "mature",
-      });
+      navigate("/");
     }
   }, []);
 
   if (!results) return null;
 
   // High-sensitivity anchors
-  const highSensAnchors = results.highSensitivityAnchors?.length
-    ? results.highSensitivityAnchors
-    : getHighSensitivityAnchors(results.scores);
-  const hasHighSensitivity = highSensAnchors.length > 0;
-  const primaryDisplayAnchor = highSensAnchors[0] || results.mainAnchor || "TF";
+  const coreAdvAnchors = results.coreAdvantageAnchors?.length
+    ? results.coreAdvantageAnchors
+    : getCoreAdvantageAnchors(results.scores);
+  const hasCoreAdvantage = coreAdvAnchors.length > 0;
+  const primaryDisplayAnchor = coreAdvAnchors[0] || results.mainAnchor || "TF";
   const primaryDisplayName = getDimensionName(primaryDisplayAnchor);
 
   // Sort scores for display
@@ -62,7 +42,7 @@ export default function MobileResultsPage() {
       key,
       name: getDimensionName(key),
       score,
-      isHighSens: highSensAnchors.includes(key),
+      isCoreAdv: coreAdvAnchors.includes(key),
     }))
     .sort((a, b) => b.score - a.score);
 
@@ -116,15 +96,15 @@ export default function MobileResultsPage() {
           <div className="flex items-center gap-2 mb-3">
             <Target className="w-5 h-5 text-primary" />
             <span className="text-xs font-semibold text-primary uppercase tracking-wider">
-              {hasHighSensitivity
-                ? (highSensAnchors.length > 1
-                  ? (language === "en" ? "Multiple High-Sensitivity Anchors" : language === "zh-TW" ? "多重高敏感錨" : "多重高敏感锚")
-                  : (language === "en" ? "High-Sensitivity Anchor" : language === "zh-TW" ? "高敏感錨" : "高敏感锚"))
-                : (language === "en" ? "No High-Sensitivity Anchor" : language === "zh-TW" ? "當前無高敏感錨" : "当前无高敏感锚")}
+              {hasCoreAdvantage
+                ? (coreAdvAnchors.length > 1
+                  ? (language === "en" ? "Multiple Core Advantage Anchors" : language === "zh-TW" ? "多重核心優勢錨點" : "多重核心优势锚点")
+                  : (language === "en" ? "Core Advantage Anchor" : language === "zh-TW" ? "核心優勢錨點" : "核心优势锚点"))
+                : (language === "en" ? "No Core Advantage Anchor" : language === "zh-TW" ? "當前無核心優勢錨點" : "当前无核心优势锚点")}
             </span>
           </div>
 
-          {hasHighSensitivity ? (
+          {hasCoreAdvantage ? (
             <>
               <h2 className="text-2xl font-bold text-foreground mb-2">
                 {primaryDisplayName}
@@ -137,9 +117,9 @@ export default function MobileResultsPage() {
                   {results.scores[primaryDisplayAnchor]}
                 </span>
               </div>
-              {highSensAnchors.length > 1 && (
+              {coreAdvAnchors.length > 1 && (
                 <div className="mt-3 pt-3 border-t border-border">
-                  {highSensAnchors.slice(1).map(anchor => (
+                  {coreAdvAnchors.slice(1).map(anchor => (
                     <div key={anchor} className="flex items-center justify-between py-1">
                       <span className="text-sm font-medium text-foreground">{getDimensionName(anchor)}</span>
                       <span className="text-lg font-bold" style={{ color: "hsl(75, 55%, 45%)" }}>{results.scores[anchor]}</span>
@@ -173,7 +153,7 @@ export default function MobileResultsPage() {
         <div className="space-y-3">
           {(() => {
             const maxScoreValue = sortedScores[0]?.score || 1;
-            return sortedScores.map(({ key, name, score, isHighSens }, index) => (
+            return sortedScores.map(({ key, name, score, isCoreAdv }, index) => (
               <motion.div
                 key={key}
                 className="flex items-center gap-3"
@@ -188,7 +168,7 @@ export default function MobileResultsPage() {
                   <motion.div
                     className={cn(
                       "h-full rounded-full",
-                      isHighSens
+                      isCoreAdv
                         ? "bg-primary"
                         : "bg-muted-foreground/30"
                     )}
@@ -200,7 +180,7 @@ export default function MobileResultsPage() {
                 <div
                   className={cn(
                     "w-10 text-sm font-medium text-right tabular-nums",
-                    isHighSens
+                    isCoreAdv
                       ? "text-primary"
                       : "text-muted-foreground"
                   )}
@@ -224,7 +204,7 @@ export default function MobileResultsPage() {
           {/* Risk Index */}
           <div className="p-4 bg-card rounded-xl border border-border">
             <div className="text-xs text-muted-foreground mb-2">
-              {language === "en" ? "Risk Index" : language === "zh-TW" ? "風險指數" : "风险指数"}
+              {language === "en" ? "Clarity Index" : language === "zh-TW" ? "錨定清晰度" : "锚定清晰度"}
             </div>
             <div className="flex items-end gap-1">
               <span
@@ -320,70 +300,34 @@ export default function MobileResultsPage() {
         transition={{ delay: 0.9 }}
       >
         <Link
-          to="/deep-dive"
-          className="flex items-center justify-between p-4 bg-card rounded-xl border border-border mb-3"
+          to="/report-view"
+          className="flex items-center justify-between p-4 bg-primary text-primary-foreground rounded-xl mb-3"
         >
           <div>
-            <div className="text-xs text-muted-foreground mb-1">
-              {language === "en" ? "Deep Dive" : language === "zh-TW" ? "深度解讀" : "深度解读"}
+            <div className="text-xs opacity-80 mb-1">
+              {language === "en" ? "Complete Report" : language === "zh-TW" ? "完整報告" : "完整报告"}
             </div>
-            <div className="font-medium text-foreground">
-              {language === "en" ? "View Full Analysis Report" : language === "zh-TW" ? "檢視完整分析報告" : "查看完整分析报告"}
+            <div className="font-medium">
+              {language === "en" ? "View Complete Report" : language === "zh-TW" ? "查看完整報告" : "查看完整报告"}
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          <ArrowRight className="w-5 h-5" />
         </Link>
 
         <Link
-          to="/action-plan"
+          to="/how-to-use"
           className="flex items-center justify-between p-4 bg-card rounded-xl border border-border"
         >
           <div>
             <div className="text-xs text-muted-foreground mb-1">
-              {language === "en" ? "Action Plan" : language === "zh-TW" ? "行動建議" : "行动建议"}
+              {language === "en" ? "How to Use Results" : language === "zh-TW" ? "如何使用結果" : "如何使用结果"}
             </div>
             <div className="font-medium text-foreground">
-              {language === "en" ? "Get Actionable Next Steps" : language === "zh-TW" ? "獲取可執行的下一步" : "获取可执行的下一步"}
+              {language === "en" ? "Make career decisions with this report" : language === "zh-TW" ? "用這份結果做職業決策" : "用这份结果做职业决策"}
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-muted-foreground" />
         </Link>
-
-        {hasIdealCards && (
-          <Link
-            to="/comprehensive-report"
-            className="flex items-center justify-between p-4 bg-card rounded-xl border border-border mt-3"
-          >
-            <div>
-              <div className="text-xs text-muted-foreground mb-1">
-                {language === "en" ? "Complete Report" : language === "zh-TW" ? "完整報告" : "完整报告"}
-              </div>
-              <div className="font-medium text-foreground flex items-center gap-2">
-                <Download className="w-4 h-4" />
-                {language === "en" ? "View & Download Full Report" : language === "zh-TW" ? "檢視並下載綜合分析報告" : "查看并下载综合分析报告"}
-              </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-muted-foreground" />
-          </Link>
-        )}
-      </motion.section>
-
-      {/* Share Button */}
-      <motion.section
-        className="px-5 mt-6"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1 }}
-      >
-        <ShareDialog
-          results={results}
-          trigger={
-            <button className="w-full flex items-center justify-center gap-2 py-4 bg-primary text-primary-foreground font-semibold rounded-xl transition-all active:scale-[0.98]">
-              <Share2 className="w-4 h-4" />
-              {language === "en" ? "Share My Report" : language === "zh-TW" ? "分享我的報告" : "分享我的报告"}
-            </button>
-          }
-        />
       </motion.section>
 
       {/* New Assessment */}

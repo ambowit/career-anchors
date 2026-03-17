@@ -17,6 +17,7 @@ import {
   getPermissionLabel,
 } from "@/lib/permissions";
 import { useOrgUsers } from "@/hooks/useAdminData";
+import { useFeaturePermissions, type FeatureKey } from "@/hooks/useFeaturePermissions";
 
 const ORG_ROLES: RoleType[] = ["org_admin", "hr", "department_manager", "employee"];
 
@@ -70,6 +71,22 @@ export default function OrgRolesPage() {
   const [editPermissions, setEditPermissions] = useState<PermissionModule[]>([]);
   const [roleOverrides, setRoleOverrides] = useState<Record<string, RoleOverride>>(loadOrgRoleOverrides);
 
+  const { hasFeature } = useFeaturePermissions();
+
+  // Map feature keys to the permission modules they gate
+  const FEATURE_MODULE_MAP: Record<string, PermissionModule[]> = {
+    analytics: ["analytics"],
+    report_download: ["reports", "report_export"],
+    certification: ["certification_management", "cdu_management"],
+  };
+
+  const disabledModules = new Set<PermissionModule>();
+  Object.entries(FEATURE_MODULE_MAP).forEach(([featureKey, modules]) => {
+    if (!hasFeature(featureKey as FeatureKey)) {
+      modules.forEach((m) => disabledModules.add(m));
+    }
+  });
+
   const users = orgUsers || [];
 
   const userCountByRole = ORG_ROLES.reduce((accumulator, role) => {
@@ -98,6 +115,7 @@ export default function OrgRolesPage() {
   };
 
   const togglePermission = (module: PermissionModule) => {
+    if (disabledModules.has(module as PermissionModule)) return;
     setEditPermissions((previous) =>
       previous.includes(module)
         ? previous.filter((permissionModule) => permissionModule !== module)
@@ -327,24 +345,36 @@ export default function OrgRolesPage() {
                   <div className="grid grid-cols-2 gap-2">
                     {ORG_PERMISSION_MODULES.map((module) => {
                       const isActive = editPermissions.includes(module);
+                      const isDisabled = disabledModules.has(module as PermissionModule);
                       return (
                         <button
                           key={module}
                           onClick={() => togglePermission(module)}
+                          disabled={isDisabled}
                           className={cn(
                             "flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium transition-all text-left",
-                            isActive
-                              ? "bg-sky-500/10 border-sky-500/30 text-sky-600"
-                              : "bg-muted/10 border-border text-muted-foreground hover:border-sky-500/20 hover:text-foreground"
+                            isDisabled
+                              ? "opacity-40 cursor-not-allowed bg-muted/5 border-border text-muted-foreground"
+                              : isActive
+                                ? "bg-sky-500/10 border-sky-500/30 text-sky-600"
+                                : "bg-muted/10 border-border text-muted-foreground hover:border-sky-500/20 hover:text-foreground"
                           )}
                         >
                           <div className={cn(
                             "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors",
-                            isActive ? "bg-sky-500 border-sky-500" : "border-muted-foreground/30"
+                            isDisabled
+                              ? "border-muted-foreground/20 bg-muted/30"
+                              : isActive ? "bg-sky-500 border-sky-500" : "border-muted-foreground/30"
                           )}>
-                            {isActive && <Check className="w-3 h-3 text-white" />}
+                            {isActive && !isDisabled && <Check className="w-3 h-3 text-white" />}
+                            {isDisabled && <X className="w-3 h-3 text-muted-foreground/50" />}
                           </div>
                           <span className="truncate">{getPermissionLabel(module, language)}</span>
+                          {isDisabled && (
+                            <span className="ml-auto text-[10px] text-muted-foreground/60 whitespace-nowrap">
+                              {language === "en" ? "N/A" : language === "zh-TW" ? "未授權" : "未授权"}
+                            </span>
+                          )}
                         </button>
                       );
                     })}

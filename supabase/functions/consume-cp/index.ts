@@ -189,13 +189,13 @@ serve(async (req) => {
     const newBalanceActivity = Number(wallet.balance_activity) - deductedByType.activity;
     const newTotalBalance = newBalancePaid + newBalanceBonus + newBalanceActivity;
 
+    // total_balance is a generated column — do NOT include it in the update
     const { error: walletUpdateError } = await supabaseAdmin
       .from("cp_wallets")
       .update({
         balance_paid: newBalancePaid,
         balance_recharge_bonus: newBalanceBonus,
         balance_activity: newBalanceActivity,
-        total_balance: newTotalBalance,
       })
       .eq("id", wallet.id);
 
@@ -209,14 +209,23 @@ serve(async (req) => {
     });
 
     // ---- 5. Record transaction ----
-    const { error: txnError } = await supabaseAdmin
+    // Determine primary cp_type based on which type had the most deduction
+    const primaryCpType = deductedByType.paid > 0 ? "paid" : deductedByType.recharge_bonus > 0 ? "recharge_bonus" : "activity";
+
+    const { data: txnRecord, error: txnError } = await supabaseAdmin
       .from("cp_transactions")
       .insert({
         user_id,
         transaction_type: "consumption",
-        cp_type: "paid", // primary type for display
+        cp_type: primaryCpType,
         amount: -amount, // negative for consumption
         balance_after: newTotalBalance,
+        balance_after_paid: newBalancePaid,
+        balance_after_bonus: newBalanceBonus,
+        balance_after_activity: newBalanceActivity,
+        paid_used: deductedByType.paid,
+        bonus_used: deductedByType.recharge_bonus,
+        activity_used: deductedByType.activity,
         description,
         metadata: {
           service_type: service_type || null,
@@ -228,16 +237,19 @@ serve(async (req) => {
           })),
           currency_value: totalCurrencyValue,
         },
-      });
+      })
+      .select("id")
+      .single();
 
     if (txnError) throw txnError;
 
-    logStep("Transaction recorded", { amount: -amount, balanceAfter: newTotalBalance });
+    logStep("Transaction recorded", { transactionId: txnRecord?.id, amount: -amount, balanceAfter: newTotalBalance });
 
     // ---- 6. Return result ----
     return new Response(
       JSON.stringify({
         success: true,
+        transaction_id: txnRecord?.id || null,
         consumed: amount,
         currency_value: Math.round(totalCurrencyValue * 100) / 100,
         wallet: {
@@ -254,8 +266,12 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logStep("ERROR in consume-cp", { message: errorMessage });
+    const errorMessage = error instanceof Error
+      ? error.message
+      : (typeof error === "object" && error !== null && "message" in error)
+        ? (error as { message: string }).message
+        : JSON.stringify(error);
+    logStep("ERROR in consume-cp", { message: errorMessage, raw: JSON.stringify(error) });
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }

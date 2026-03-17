@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronsUpDown, Check, Loader2 } from "lucide-react";
+import { ChevronsUpDown, Check, Loader2, Building2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useLanguage";
@@ -10,6 +11,7 @@ import {
   type RoleType,
   getRoleLabel,
   getConsolePath,
+  getRoleCategory,
 } from "@/lib/permissions";
 import type { AdditionalRole } from "@/hooks/useAdminData";
 
@@ -30,20 +32,55 @@ export default function RoleSwitcher({ collapsed = false }: RoleSwitcherProps) {
     ? ((profile as any).additional_roles as AdditionalRole[])
     : [];
 
+  // Collect all unique org IDs from primary + additional roles for name lookup
+  const allOrgIds = useMemo(() => {
+    const orgIdSet = new Set<string>();
+    if (profile?.organization_id) orgIdSet.add(profile.organization_id);
+    additionalRoles.forEach((additionalRole) => {
+      if (additionalRole.organization_id) orgIdSet.add(additionalRole.organization_id);
+    });
+    return [...orgIdSet];
+  }, [profile?.organization_id, additionalRoles]);
+
+  // Fetch org names from DB — reliable source of truth
+  const { data: orgNameMap } = useQuery({
+    queryKey: ["role-switcher-org-names", allOrgIds],
+    enabled: allOrgIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("organizations")
+        .select("id, name")
+        .in("id", allOrgIds);
+      const nameMap = new Map<string, string>();
+      if (data) data.forEach((org) => nameMap.set(org.id, org.name));
+      return nameMap;
+    },
+  });
+
+  // Resolve org name: DB lookup > stored name > null
+  const resolveOrgName = (orgId: string | null, storedName?: string | null): string | null => {
+    if (!orgId) return null;
+    return orgNameMap?.get(orgId) ?? storedName ?? null;
+  };
+
   // No additional roles — don't render
   if (additionalRoles.length === 0) return null;
+
+  // Is this role type org-related (should show org name)?
+  const isOrgRelatedRole = (roleType: string) => getRoleCategory(roleType as RoleType) === "organization";
 
   const allRoles = [
     {
       roleType: currentRoleType,
       organizationId: profile?.organization_id || null,
-      organizationName: null as string | null,
+      organizationName: resolveOrgName(profile?.organization_id || null),
       isCurrent: true,
     },
     ...additionalRoles.map((additionalRole) => ({
       roleType: additionalRole.role_type as RoleType,
       organizationId: additionalRole.organization_id,
-      organizationName: additionalRole.organization_name || null,
+      organizationName: resolveOrgName(additionalRole.organization_id, additionalRole.organization_name),
       isCurrent: false,
     })),
   ];
@@ -64,6 +101,8 @@ export default function RoleSwitcher({ collapsed = false }: RoleSwitcherProps) {
     setIsSwitching(true);
     try {
       // Swap: current primary → additional, target additional → primary
+      // Preserve org name when demoting current role to additional
+      const currentOrgName = resolveOrgName(profile?.organization_id || null);
       const newAdditionalRoles: AdditionalRole[] = additionalRoles
         .filter(
           (additionalRole) =>
@@ -72,7 +111,7 @@ export default function RoleSwitcher({ collapsed = false }: RoleSwitcherProps) {
         .concat({
           role_type: currentRoleType,
           organization_id: profile?.organization_id || null,
-          organization_name: null,
+          organization_name: currentOrgName ?? undefined,
           department_id: profile?.department_id || null,
         });
 
@@ -117,6 +156,7 @@ export default function RoleSwitcher({ collapsed = false }: RoleSwitcherProps) {
     consultant: "bg-emerald-500/20 text-emerald-400",
     client: "bg-teal-500/20 text-teal-400",
     individual: "bg-gray-500/20 text-gray-400",
+    partner: "bg-amber-500/20 text-amber-400",
   };
 
   if (collapsed) {
@@ -147,12 +187,13 @@ export default function RoleSwitcher({ collapsed = false }: RoleSwitcherProps) {
                     : "text-slate-400 hover:text-white hover:bg-white/5"
                 )}
               >
-                <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", roleColorMap[roleItem.roleType] || "bg-gray-500/20 text-gray-400")}>
+                <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap", roleColorMap[roleItem.roleType] || "bg-gray-500/20 text-gray-400")}>
                   {getRoleLabel(roleItem.roleType as RoleType, language)}
                 </span>
-                {roleItem.organizationName && (
-                  <span className="text-[11px] text-slate-500 truncate">
-                    {roleItem.organizationName}
+                {isOrgRelatedRole(roleItem.roleType) && roleItem.organizationName && (
+                  <span className="flex items-center gap-1 text-[11px] text-slate-500 truncate min-w-0">
+                    <Building2 className="w-3 h-3 flex-shrink-0 opacity-60" />
+                    <span className="truncate">{roleItem.organizationName}</span>
                   </span>
                 )}
                 {roleItem.isCurrent && <Check className="w-3.5 h-3.5 ml-auto text-emerald-400 flex-shrink-0" />}
@@ -206,9 +247,10 @@ export default function RoleSwitcher({ collapsed = false }: RoleSwitcherProps) {
               <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap", roleColorMap[roleItem.roleType] || "bg-gray-500/20 text-gray-400")}>
                 {getRoleLabel(roleItem.roleType as RoleType, language)}
               </span>
-              {roleItem.organizationName && (
-                <span className="text-[11px] text-slate-500 truncate">
-                  {roleItem.organizationName}
+              {isOrgRelatedRole(roleItem.roleType) && roleItem.organizationName && (
+                <span className="flex items-center gap-1 text-[11px] text-slate-500 truncate min-w-0">
+                  <Building2 className="w-3 h-3 flex-shrink-0 opacity-60" />
+                  <span className="truncate">{roleItem.organizationName}</span>
                 </span>
               )}
               {roleItem.isCurrent && <Check className="w-3.5 h-3.5 ml-auto text-emerald-400 flex-shrink-0" />}

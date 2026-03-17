@@ -1,61 +1,37 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, AlertTriangle, Target, Zap, Share2, Shield, AlertCircle, Lightbulb, Compass, MessageCircle, Users, Heart, BarChart3, Download, Loader2 } from "lucide-react";
+import { ArrowRight, AlertTriangle, Target, Zap, Shield, AlertCircle, Lightbulb, Compass, MessageCircle, Download, Loader2 } from "lucide-react";
 import RadarChart from "@/components/desktop/RadarChart";
-import ShareDialog from "@/components/desktop/ShareDialog";
-import { DIMENSIONS, type AssessmentResult, SCORE_INTERPRETATION, getHighSensitivityAnchors } from "@/hooks/useAssessment";
+
+import { DIMENSIONS, type AssessmentResult, SCORE_INTERPRETATION, getCoreAdvantageAnchors } from "@/hooks/useAssessment";
 import { DIMENSION_NAMES } from "@/data/questions";
 import { useTranslation } from "@/hooks/useLanguage";
-import { cn } from "@/lib/utils";
+import { cn, resolveUserDisplayName, resolveWorkExperienceYears } from "@/lib/utils";
 import { useTestAuth, getWorkExperienceDescription, type LanguageKey } from "@/hooks/useTestAuth";
-import { downloadReportAsPdf } from "@/lib/exportReport";
-import type { Language } from "@/hooks/useLanguage";
+import { downloadV3ReportAsPdf } from "@/lib/reportV3Download";
+import type { LangKey } from "@/lib/reportDataFetcher";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 export default function ResultsOverviewPage() {
   const navigate = useNavigate();
   const { t, language } = useTranslation();
   const prefersReducedMotion = useReducedMotion();
-  const { workYears, isExecutive, isEntrepreneur } = useTestAuth();
+  const { workYears, isExecutive, isEntrepreneur, careerStage } = useTestAuth();
+  const { user, profile } = useAuth();
+  const location = useLocation();
+  const isFromHistory = !!(location.state as { fromHistory?: boolean })?.fromHistory;
   const workExpDescription = getWorkExperienceDescription(workYears, isExecutive, isEntrepreneur, language as LanguageKey);
   const [results, setResults] = useState<AssessmentResult | null>(null);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingV3, setDownloadingV3] = useState(false);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("assessmentResults");
     if (stored) {
       setResults(JSON.parse(stored));
     } else {
-      // Demo data for preview (SCPC format)
-      setResults({
-        scores: {
-          TF: 82,
-          GM: 45,
-          AU: 75,
-          SE: 35,
-          EC: 68,
-          SV: 55,
-          CH: 70,
-          LS: 48,
-        },
-        mainAnchor: "TF",
-        highSensitivityAnchors: ["TF"],
-        conflictAnchors: [["AU", "SE"]],
-        riskIndex: 42,
-        salienceQuestionIds: ["Q001", "Q003", "Q021", "Q041", "Q061"],
-        stability: "mature",
-        interpretation: {
-          TF: { level: "nonNegotiable", label: "不可妥协的长期约束", score: 82 },
-          GM: { level: "conditional", label: "条件性约束", score: 45 },
-          AU: { level: "highSensitive", label: "高敏感约束", score: 75 },
-          SE: { level: "nonCore", label: "非核心维度", score: 35 },
-          EC: { level: "highSensitive", label: "高敏感约束", score: 68 },
-          SV: { level: "conditional", label: "条件性约束", score: 55 },
-          CH: { level: "highSensitive", label: "高敏感约束", score: 70 },
-          LS: { level: "conditional", label: "条件性约束", score: 48 },
-        },
-      });
+      navigate("/");
     }
   }, [navigate]);
 
@@ -66,22 +42,22 @@ export default function ResultsOverviewPage() {
     return DIMENSION_NAMES[dim as keyof typeof DIMENSION_NAMES]?.[language] || dim;
   };
 
-  // High-sensitivity anchors (score > 80)
-  const highSensAnchors = results.highSensitivityAnchors?.length
-    ? results.highSensitivityAnchors
-    : getHighSensitivityAnchors(results.scores);
-  const hasHighSensitivity = highSensAnchors.length > 0;
-  const isMultipleHighSens = highSensAnchors.length > 1;
-  // For display: use first high-sensitivity anchor, or top-scoring anchor as fallback
-  const primaryDisplayAnchor = highSensAnchors[0] || results.mainAnchor || null;
+  // Core advantage anchors (score >= 80)
+  const coreAdvAnchors = results.coreAdvantageAnchors?.length
+    ? results.coreAdvantageAnchors
+    : getCoreAdvantageAnchors(results.scores);
+  const hasCoreAdvantage = coreAdvAnchors.length > 0;
+  const isMultipleCoreAdv = coreAdvAnchors.length > 1;
+  // For display: use first core advantage anchor, or top-scoring anchor as fallback
+  const primaryDisplayAnchor = coreAdvAnchors[0] || results.mainAnchor || null;
   const primaryDisplayName = primaryDisplayAnchor ? getDimensionName(primaryDisplayAnchor) : null;
 
   // Score level colors
   const getLevelColor = (level: string) => {
     switch (level) {
-      case "nonNegotiable": return { bg: "hsl(0, 70%, 94%)", text: "hsl(0, 70%, 40%)", border: "hsl(0, 70%, 80%)" };
+      case "coreAdvantage": return { bg: "hsl(0, 70%, 94%)", text: "hsl(0, 70%, 40%)", border: "hsl(0, 70%, 80%)" };
       case "highSensitive": return { bg: "hsl(35, 90%, 94%)", text: "hsl(35, 90%, 35%)", border: "hsl(35, 90%, 80%)" };
-      case "conditional": return { bg: "hsl(210, 50%, 94%)", text: "hsl(210, 50%, 40%)", border: "hsl(210, 50%, 80%)" };
+      case "moderate": return { bg: "hsl(210, 50%, 94%)", text: "hsl(210, 50%, 40%)", border: "hsl(210, 50%, 80%)" };
       case "nonCore": return { bg: "hsl(0, 0%, 95%)", text: "hsl(0, 0%, 50%)", border: "hsl(0, 0%, 85%)" };
       default: return { bg: "hsl(0, 0%, 95%)", text: "hsl(0, 0%, 50%)", border: "hsl(0, 0%, 85%)" };
     }
@@ -91,18 +67,18 @@ export default function ResultsOverviewPage() {
   const getScoreUserLanguage = (score: number) => {
     if (language === "en") {
       if (score >= 80) return "Very hard to compromise long-term";
-      if (score >= 65) return "Can tolerate short-term, needs attention long-term";
+      if (score >= 65) return "High-sensitivity anchor, sustainable development";
       if (score >= 45) return "Matters to you, but not a bottom line";
       return "Not your main decision factor";
     } else if (language === "zh-TW") {
       if (score >= 80) return "很難長期妥協";
-      if (score >= 65) return "短期可以忍，但長期需要被關注";
+      if (score >= 65) return "高敏感錨點，可持續發展";
       if (score >= 45) return "有意義，但不是底線";
       return "不是做選擇時最在意的點";
     }
     // zh-CN
     if (score >= 80) return "很难长期妥协";
-    if (score >= 65) return "短期可以忍，但长期需要被关注";
+    if (score >= 65) return "高敏感锚点，可持续发展";
     if (score >= 45) return "有意义，但不是底线";
     return "不是做选择时最在意的点";
   };
@@ -111,7 +87,7 @@ export default function ResultsOverviewPage() {
   const texts = {
     "zh-CN": {
       resultsLabel: "你的职业锚评测结果",
-      title: "了解你长期职业中不能被牺牲的东西",
+      title: "探索你最值得坚持与发展的\n职涯核心需求",
       // Opening explanation
       openingTitle: "这个结果代表什么？",
       openingText: "这不是能力测评，也不是性格测试。你的分数不代表你强或弱，而代表：在长期职业选择中，哪些条件如果反复被忽视，你会逐渐痛苦、消耗，甚至离开。",
@@ -121,12 +97,12 @@ export default function ResultsOverviewPage() {
       radarTitle: "如何看这张图？",
       radarGuide: "这张图不是在比较你像谁，而是在显示：不同职业需求对你来说，「有多不可妥协」。越接近外圈，代表越难被牺牲；越靠近中心，代表你对此相对灵活。",
       // Main anchor
-      highSensAnchor: "您的高敏感锚",
-      multiHighSens: "多重高敏感锚",
-      noHighSens: "当前无高敏感锚",
-      noHighSensAdvice: "建议关注高分锚点结构组合。",
-      highSensIntro: "对你来说，真正重要的是——",
-      highSensNote: "这不是你现在的工作，而是你长期职业里不能被牺牲的底线。",
+      coreAdvAnchor: "您的核心优势锚点",
+      multiCoreAdv: "多重核心优势锚点",
+      noCoreAdv: "当前无核心优势锚点",
+      noCoreAdvAdvice: "建议关注高分锚点结构组合。",
+      coreAdvIntro: "对你来说，真正重要的是——",
+      coreAdvNote: "最不愿放弃的自我概念中的核心要素。",
       ifPresent: "如果这个条件长期存在",
       ifAbsent: "如果这个条件长期不存在",
       // Conflict
@@ -142,33 +118,28 @@ export default function ResultsOverviewPage() {
       direction3: "把这个结果当作「长期导航参考」，而不是一次性答案。",
       // Closing
       closingTitle: "写在最后",
-      closingText: "这个结果不是给你一个标准答案，而是帮你更清楚地知道：如果你要走很远，哪些东西不能被反复牺牲。",
+      closingText: "这个结果不是给你一个标准答案，而是帮你更清楚地知道：如果你要走很远，哪些要素是您的核心坚持。",
       // Actions
-      share: "分享报告",
-      deepDive: "AI 深度解读",
-      deepDiveDesc: "获得更个性化的分析",
-      actionPlan: "行动建议",
-      actionPlanDesc: "基于约束的职业策略",
       howToUse: "如何使用结果",
       howToUseDesc: "用这份结果做职业决策",
-      hrGuide: "HR 专业解读",
-      hrGuideDesc: "组织发展视角的使用指南",
+      viewReport: "查看完整报告",
+      downloadReport: "下载完整报告",
     },
     "zh-TW": {
       resultsLabel: "你的職業錨評測結果",
-      title: "了解你長期職業中不能被犧牲的東西",
+      title: "探索你最值得堅持與發展的\n職涯核心需求",
       openingTitle: "這個結果代表什麼？",
       openingText: "這不是能力測評，也不是性格測試。你的分數不代表你強或弱，而代表：在長期職業選擇中，哪些條件如果反覆被忽視，你會逐漸痛苦、消耗，甚至離開。",
       scoreHighMeaning: "分數高 = 對你很重要",
       scoreLowMeaning: "分數低 = 對你不是核心驅動力（不是缺點）",
       radarTitle: "如何看這張圖？",
       radarGuide: "這張圖不是在比較你像誰，而是在顯示：不同職業需求對你來說，「有多不可妥協」。越接近外圈，代表越難被犧牲；越靠近中心，代表你對此相對靈活。",
-      highSensAnchor: "您的高敏感錨",
-      multiHighSens: "多重高敏感錨",
-      noHighSens: "當前無高敏感錨",
-      noHighSensAdvice: "建議關注高分錨點結構組合。",
-      highSensIntro: "對你來說，真正重要的是——",
-      highSensNote: "這不是你現在的工作，而是你長期職業裡不能被犧牲的底線。",
+      coreAdvAnchor: "您的核心優勢錨點",
+      multiCoreAdv: "多重核心優勢錨點",
+      noCoreAdv: "當前無核心優勢錨點",
+      noCoreAdvAdvice: "建議關注高分錨點結構組合。",
+      coreAdvIntro: "對你來說，真正重要的是——",
+      coreAdvNote: "最不願放棄的自我概念中的核心要素。",
       ifPresent: "如果這個條件長期存在",
       ifAbsent: "如果這個條件長期不存在",
       conflictLabel: "需要留意的拉扯",
@@ -181,32 +152,27 @@ export default function ResultsOverviewPage() {
       direction2: "當你感到持續疲憊或抗拒時：不是馬上懷疑自己能力，而是回頭看看，是不是某個核心需求被忽視了。",
       direction3: "把這個結果當作「長期導航參考」，而不是一次性答案。",
       closingTitle: "寫在最後",
-      closingText: "這個結果不是給你一個標準答案，而是幫你更清楚地知道：如果你要走很遠，哪些東西不能被反覆犧牲。",
-      share: "分享報告",
-      deepDive: "AI 深度解讀",
-      deepDiveDesc: "獲得更個性化的分析",
-      actionPlan: "行動建議",
-      actionPlanDesc: "基於約束的職業策略",
+      closingText: "這個結果不是給你一個標準答案，而是幫你更清楚地知道：如果你要走很遠，哪些要素是您的核心堅持。",
       howToUse: "如何使用結果",
       howToUseDesc: "用這份結果做職業決策",
-      hrGuide: "HR 專業解讀",
-      hrGuideDesc: "組織發展視角的使用指南",
+      viewReport: "查看完整報告",
+      downloadReport: "下載完整報告",
     },
     "en": {
       resultsLabel: "Your Career Anchor Results",
-      title: "Understanding what you can't sacrifice in your long-term career",
+      title: "Explore the Core Career Needs\nWorth Persisting and Developing",
       openingTitle: "What does this result mean?",
       openingText: "This is not an ability test or personality assessment. Your scores don't indicate strength or weakness—they show: in long-term career choices, which conditions, if repeatedly ignored, will gradually cause you pain, drain, or even make you leave.",
       scoreHighMeaning: "High score = Very important to you",
       scoreLowMeaning: "Low score = Not your core driver (not a weakness)",
       radarTitle: "How to read this chart?",
       radarGuide: "This chart isn't comparing you to anyone. It shows: for different career needs, 'how non-negotiable' they are for you. Closer to the outer ring means harder to sacrifice; closer to the center means you're more flexible about it.",
-      highSensAnchor: "Your High-Sensitivity Anchor",
-      multiHighSens: "Multiple High-Sensitivity Anchors",
-      noHighSens: "No High-Sensitivity Anchor Currently",
-      noHighSensAdvice: "Focus on understanding your structural anchor combination.",
-      highSensIntro: "For you, what truly matters is—",
-      highSensNote: "This isn't about your current job—it's the bottom line that cannot be sacrificed in your long-term career.",
+      coreAdvAnchor: "Your Core Advantage Anchor",
+      multiCoreAdv: "Multiple Core Advantage Anchors",
+      noCoreAdv: "No Core Advantage Anchor Currently",
+      noCoreAdvAdvice: "Focus on understanding your structural anchor combination.",
+      coreAdvIntro: "For you, what truly matters is—",
+      coreAdvNote: "The core element of your self-concept you are least willing to give up.",
       ifPresent: "If this condition exists long-term",
       ifAbsent: "If this condition is missing long-term",
       conflictLabel: "A tension to be aware of",
@@ -219,16 +185,11 @@ export default function ResultsOverviewPage() {
       direction2: "When you feel persistently tired or resistant: instead of immediately doubting your ability, look back to see if a core need has been neglected.",
       direction3: "Treat this result as a 'long-term navigation reference,' not a one-time answer.",
       closingTitle: "Final note",
-      closingText: "This result doesn't give you a standard answer—it helps you see more clearly: if you want to go far, what cannot be repeatedly sacrificed.",
-      share: "Share Report",
-      deepDive: "AI Deep Dive",
-      deepDiveDesc: "Get personalized analysis",
-      actionPlan: "Action Plan",
-      actionPlanDesc: "Constraint-based career strategy",
+      closingText: "This result doesn't give you a standard answer—it helps you see more clearly: if you want to go far, which elements are your core commitments.",
       howToUse: "How to Use Results",
       howToUseDesc: "Make career decisions with this report",
-      hrGuide: "HR Professional Guide",
-      hrGuideDesc: "Organizational development perspective",
+      viewReport: "View Complete Report",
+      downloadReport: "Download Complete Report",
     },
   };
 
@@ -400,7 +361,7 @@ export default function ResultsOverviewPage() {
       >
         <div className="max-w-4xl mx-auto text-center">
           <div className="data-label text-primary mb-4">{txt.resultsLabel}</div>
-          <h1 className="font-display text-3xl md:text-4xl text-foreground mb-4">
+          <h1 className="font-display text-3xl md:text-4xl text-foreground mb-4 whitespace-pre-line">
             {txt.title}
           </h1>
           {workExpDescription && (
@@ -462,7 +423,7 @@ export default function ResultsOverviewPage() {
               </p>
               <RadarChart
                 scores={results.scores}
-                highSensitivityAnchors={highSensAnchors}
+                coreAdvantageAnchors={coreAdvAnchors}
                 animate={!prefersReducedMotion}
               />
 
@@ -521,19 +482,19 @@ export default function ResultsOverviewPage() {
               <div className="flex items-center gap-2 mb-4">
                 <Target className="w-5 h-5" />
                 <span className="data-label text-primary-foreground/80">
-                  {hasHighSensitivity
-                    ? (isMultipleHighSens ? txt.multiHighSens : txt.highSensAnchor)
-                    : txt.noHighSens}
+                  {hasCoreAdvantage
+                    ? (isMultipleCoreAdv ? txt.multiCoreAdv : txt.coreAdvAnchor)
+                    : txt.noCoreAdv}
                 </span>
               </div>
 
-              {hasHighSensitivity ? (
+              {hasCoreAdvantage ? (
                 <>
-                  {highSensAnchors.map((anchor, index) => (
+                  {coreAdvAnchors.map((anchor, index) => (
                     <div key={anchor} className={index > 0 ? "mt-6 pt-6 border-t border-primary-foreground/20" : ""}>
                       <h2 className="text-2xl font-semibold mb-3">{getDimensionName(anchor)}</h2>
                       <p className="text-lg font-medium mb-3">
-                        {txt.highSensIntro}
+                        {txt.coreAdvIntro}
                         <span className="text-primary-foreground">{getAnchorCoreMeaning(anchor)}</span>
                       </p>
                       <div className="space-y-3 mb-3">
@@ -557,13 +518,13 @@ export default function ResultsOverviewPage() {
                     </div>
                   ))}
                   <p className="text-xs text-primary-foreground/60 italic mt-4">
-                    {txt.highSensNote}
+                    {txt.coreAdvNote}
                   </p>
                 </>
               ) : (
                 <div className="py-6">
                   <p className="text-lg font-medium text-primary-foreground/80 mb-2">
-                    {txt.noHighSensAdvice}
+                    {txt.noCoreAdvAdvice}
                   </p>
                   <p className="text-sm text-primary-foreground/60">
                     {language === "en"
@@ -659,85 +620,6 @@ export default function ResultsOverviewPage() {
         </div>
       </section>
 
-      {/* Ideal Card Test Entry */}
-      <motion.section
-        className="py-8 px-6"
-        initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
-        animate={prefersReducedMotion ? {} : { opacity: 1, y: 0 }}
-        transition={{ delay: 1.6, duration: 0.5 }}
-      >
-        <div className="max-w-6xl mx-auto">
-          {(() => {
-            const idealCardResults = sessionStorage.getItem("idealCardResults");
-            const hasIdealCard = !!idealCardResults;
-            if (hasIdealCard) {
-              return (
-                <div
-                  className="relative overflow-hidden rounded-xl border-2 p-6 md:p-8 cursor-pointer hover:shadow-lg transition-all group"
-                  style={{
-                    borderColor: "#e74c6f",
-                    background: "linear-gradient(135deg, #fce4ec 0%, #f3e5f5 50%, #e8eaf6 100%)",
-                  }}
-                  onClick={() => navigate("/comprehensive-report")}
-                >
-                  <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle at 2px 2px, #000 1px, transparent 0)", backgroundSize: "20px 20px" }} />
-                  <div className="relative flex items-center gap-4 md:gap-6">
-                    <div className="p-3 rounded-xl" style={{ backgroundColor: "rgba(231,76,111,0.15)" }}>
-                      <BarChart3 className="w-8 h-8" style={{ color: "#e74c6f" }} />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-lg text-slate-800 mb-1">
-                        {language === "en" ? "View Comprehensive Report" : language === "zh-TW" ? "查看完整報告" : "查看完整报告"}
-                      </h3>
-                      <p className="text-sm text-slate-600">
-                        {language === "en"
-                          ? "Your Career Anchor + Ideal Life Card comprehensive analysis is ready"
-                          : language === "zh-TW"
-                          ? "你的職業錨 + 理想人生卡綜合分析報告已生成"
-                          : "你的职业锚 + 理想人生卡综合分析报告已生成"}
-                      </p>
-                    </div>
-                    <ArrowRight className="w-5 h-5 text-slate-400 group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </div>
-              );
-            }
-            return (
-              <div
-                className="relative overflow-hidden rounded-xl border-2 border-dashed p-6 md:p-8 cursor-pointer hover:shadow-lg transition-all group"
-                style={{ borderColor: "#e74c6f40" }}
-                onClick={() => navigate("/ideal-card-test")}
-              >
-                <div className="flex items-center gap-4 md:gap-6">
-                  <div className="p-3 rounded-xl" style={{ backgroundColor: "#fce4ec" }}>
-                    <Heart className="w-8 h-8" style={{ color: "#e74c6f" }} />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-lg text-slate-800 mb-1">
-                      {language === "en" ? "Explore Your Ideal Life Cards" : language === "zh-TW" ? "探索你的理想人生卡" : "探索你的理想人生卡"}
-                    </h3>
-                    <p className="text-sm text-slate-600">
-                      {language === "en"
-                        ? "Discover your top 10 core values from 70 ideal life cards"
-                        : language === "zh-TW"
-                        ? "通過70張價值卡片，發現你人生中最重要的10個價值觀"
-                        : "通过70张价值卡片，发现你人生中最重要的10个价值观"}
-                    </p>
-                  </div>
-                  <div
-                    className="px-5 py-2.5 rounded-xl font-semibold text-white text-sm flex items-center gap-2 group-hover:shadow-md transition-all"
-                    style={{ backgroundColor: "#e74c6f" }}
-                  >
-                    {language === "en" ? "Start" : language === "zh-TW" ? "開始測試" : "开始测试"}
-                    <ArrowRight className="w-4 h-4" />
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </motion.section>
-
       {/* Action Links */}
       <motion.section
         className="py-12 px-6"
@@ -746,117 +628,78 @@ export default function ResultsOverviewPage() {
         transition={{ delay: 1.8, duration: 0.5 }}
       >
         <div className="max-w-6xl mx-auto">
-          {/* Share & Download */}
-          <div className="mb-6 flex justify-end gap-3">
+          {/* How to use results */}
+          <Link
+            to="/how-to-use"
+            className="flex items-center justify-between p-6 bg-primary/5 border border-primary/20 rounded-sm hover:border-primary transition-colors group mb-6"
+          >
+            <div>
+              <div className="data-label mb-2 text-primary">{txt.howToUse}</div>
+              <div className="font-medium text-foreground">
+                {txt.howToUseDesc}
+              </div>
+            </div>
+            <Compass className="w-5 h-5 text-primary" />
+          </Link>
+
+          {/* View & Download buttons */}
+          <div className="flex justify-end gap-3 flex-wrap">
+            <Link
+              to="/report-view"
+              className="flex items-center gap-2 px-4 py-2 bg-card border border-border text-foreground font-medium rounded-sm hover:bg-muted transition-colors"
+            >
+              <ArrowRight className="w-4 h-4" />
+              {txt.viewReport}
+            </Link>
             <button
-              className="flex items-center gap-2 px-4 py-2 bg-card border border-border text-foreground font-medium rounded-sm hover:bg-muted transition-colors disabled:opacity-50"
-              disabled={downloadingPdf}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
+              disabled={downloadingV3}
               onClick={async () => {
-                if (!results) return;
-                setDownloadingPdf(true);
+                if (!user) return;
+                setDownloadingV3(true);
                 try {
-                  const flatConflicts = results.conflictAnchors
-                    ? results.conflictAnchors.flatMap(pair => pair)
-                    : [];
-                  await downloadReportAsPdf(
-                    {
-                      mainAnchor: highSensAnchors[0] || results.mainAnchor || "",
-                      highSensitivityAnchors: highSensAnchors,
-                      scores: results.scores,
-                      stability: results.stability || "developing",
-                      riskIndex: results.riskIndex || 0,
-                      conflictAnchors: flatConflicts,
-                      workExpDescription: workExpDescription,
-                    },
-                    language as Language
-                  );
+                  // Use same sessionStorage data displayed on this page
+                  const reportOutput = await downloadV3ReportAsPdf({
+                    scores: results.scores,
+                    careerStage: profile?.career_stage || careerStage || "mid",
+                    userName: resolveUserDisplayName(profile, user, language),
+                    workExperienceYears: resolveWorkExperienceYears(profile?.work_experience_years, workYears, profile?.career_stage || careerStage),
+                    userId: user.id,
+                    language: language as LangKey,
+                  });
+                  if (!reportOutput) {
+                    toast.error(
+                      language === "en" ? "No assessment data found" : language === "zh-TW" ? "未找到測評數據" : "未找到测评数据"
+                    );
+                    return;
+                  }
                   toast.success(
                     language === "en"
-                      ? "PDF downloaded successfully"
+                      ? "Report downloaded"
                       : language === "zh-TW"
-                      ? "PDF 下載成功"
-                      : "PDF 下载成功"
+                      ? "完整報告已下載"
+                      : "完整报告已下载"
                   );
                 } catch {
                   toast.error(
                     language === "en"
-                      ? "Failed to generate PDF"
+                      ? "Failed to generate report"
                       : language === "zh-TW"
-                      ? "PDF 生成失敗"
-                      : "PDF 生成失败"
+                      ? "報告生成失敗"
+                      : "报告生成失败"
                   );
                 } finally {
-                  setDownloadingPdf(false);
+                  setDownloadingV3(false);
                 }
               }}
             >
-              {downloadingPdf ? (
+              {downloadingV3 ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <Download className="w-4 h-4" />
               )}
-              {language === "en" ? "Download PDF" : language === "zh-TW" ? "下載 PDF" : "下载 PDF"}
+              {txt.downloadReport}
             </button>
-            <ShareDialog
-              results={results}
-              trigger={
-                <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-sm hover:bg-primary/90 transition-colors">
-                  <Share2 className="w-4 h-4" />
-                  {txt.share}
-                </button>
-              }
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Link
-              to="/how-to-use"
-              className="flex items-center justify-between p-6 bg-primary/5 border border-primary/20 rounded-sm hover:border-primary transition-colors group"
-            >
-              <div>
-                <div className="data-label mb-2 text-primary">{txt.howToUse}</div>
-                <div className="font-medium text-foreground">
-                  {txt.howToUseDesc}
-                </div>
-              </div>
-              <Compass className="w-5 h-5 text-primary" />
-            </Link>
-            <Link
-              to="/deep-dive"
-              className="flex items-center justify-between p-6 bg-card border border-border rounded-sm hover:border-primary transition-colors group"
-            >
-              <div>
-                <div className="data-label mb-2">{txt.deepDive}</div>
-                <div className="font-medium text-foreground">
-                  {txt.deepDiveDesc}
-                </div>
-              </div>
-              <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-            </Link>
-            <Link
-              to="/action-plan"
-              className="flex items-center justify-between p-6 bg-card border border-border rounded-sm hover:border-primary transition-colors group"
-            >
-              <div>
-                <div className="data-label mb-2">{txt.actionPlan}</div>
-                <div className="font-medium text-foreground">
-                  {txt.actionPlanDesc}
-                </div>
-              </div>
-              <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-            </Link>
-            <Link
-              to="/hr-guide"
-              className="flex items-center justify-between p-6 bg-muted/50 border border-border rounded-sm hover:border-primary transition-colors group"
-            >
-              <div>
-                <div className="data-label mb-2">{txt.hrGuide}</div>
-                <div className="font-medium text-foreground">
-                  {txt.hrGuideDesc}
-                </div>
-              </div>
-              <Users className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-            </Link>
           </div>
         </div>
       </motion.section>

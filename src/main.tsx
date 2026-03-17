@@ -3,6 +3,11 @@ import { createRoot } from 'react-dom/client';
 import App from '@/App';
 import '@/index.css';
 
+// Handle Vite CSS/module preload failures after deployments (stale cache)
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+});
+
 createRoot(document.getElementById('root')!).render(
     <StrictMode>
         <App />

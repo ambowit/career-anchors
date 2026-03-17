@@ -4,6 +4,8 @@ import { motion, AnimatePresence, Reorder } from "framer-motion";
 import { ArrowRight, ArrowLeft, Check, GripVertical, Heart, Sparkles } from "lucide-react";
 import { useTranslation } from "@/hooks/useLanguage";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import {
   IDEAL_CARDS,
   CATEGORY_CONFIG,
@@ -27,7 +29,7 @@ const PHASE_DESCRIPTIONS = {
   select30: {
     "zh-CN": "从以下70张理想人生卡中，选出对你最重要的30张",
     "zh-TW": "從以下70張理想人生卡中，選出對你最重要的30張",
-    en: "From these 70 ideal life cards, pick the 30 most important to you",
+    en: "From these 70 Espresso Cards, pick the 30 most important to you",
   },
   select10: {
     "zh-CN": "从刚才选出的30张中，再精选出最核心的10张",
@@ -109,7 +111,9 @@ export default function IdealCardTestPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleComplete = () => {
+  const { user } = useAuth();
+
+  const handleComplete = async () => {
     // Save ranked results to sessionStorage
     const idealCardResults = rankedCards.map((card, index) => ({
       rank: index + 1,
@@ -119,12 +123,31 @@ export default function IdealCardTestPage() {
       labelEn: card.en,
     }));
     sessionStorage.setItem("idealCardResults", JSON.stringify(idealCardResults));
+
+    // Persist to ideal_card_results table (best-effort, don't block navigation)
+    if (user) {
+      const categoryDistribution: Record<string, number> = { intrinsic: 0, lifestyle: 0, interpersonal: 0, material: 0 };
+      idealCardResults.forEach(card => { categoryDistribution[card.category] = (categoryDistribution[card.category] || 0) + 1; });
+
+      supabase
+        .from("ideal_card_results")
+        .insert({
+          user_id: user.id,
+          ranked_cards: idealCardResults,
+          top10_cards: idealCardResults.slice(0, 10),
+          category_distribution: categoryDistribution,
+        })
+        .then(({ error }) => {
+          if (error) console.error("Failed to save ideal card results:", error);
+        });
+    }
+
     // If career anchor results also exist, go directly to comprehensive report
     const hasCareerAnchorResults = !!sessionStorage.getItem("assessmentResults");
     if (hasCareerAnchorResults) {
-      navigate("/comprehensive-report");
+      navigate("/fusion-report");
     } else {
-      navigate("/ideal-card-results");
+      navigate("/ideal-card-report-view");
     }
   };
 
@@ -160,7 +183,7 @@ export default function IdealCardTestPage() {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
           >
-            {isEn ? "Ideal Life Cards" : language === "zh-TW" ? "理想人生卡" : "理想人生卡"}
+            {isEn ? "Espresso Cards" : language === "zh-TW" ? "理想人生卡" : "理想人生卡"}
           </motion.h1>
 
           <motion.p
@@ -175,30 +198,6 @@ export default function IdealCardTestPage() {
               ? "通過70張精心設計的價值卡片，發現你人生中最重要的價值觀。本測試採用焦點解決牌卡技術，幫助你找到內心最真實的渴望。"
               : "通过70张精心设计的价值卡片，发现你人生中最重要的价值观。本测试采用焦点解决牌卡技术，帮助你找到内心最真实的渴望。"}
           </motion.p>
-
-          {/* Steps preview */}
-          <motion.div
-            className="bg-white/60 backdrop-blur-sm rounded-xl p-5 mb-8 text-left space-y-3 border border-white/80"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-          >
-            {[
-              { step: 1, label: isEn ? "Pick 30 from 70 cards" : language === "zh-TW" ? "從70張中選出30張" : "从70张中选出30张" },
-              { step: 2, label: isEn ? "Narrow down to 10 cards" : language === "zh-TW" ? "從30張中精選10張" : "从30张中精选10张" },
-              { step: 3, label: isEn ? "Rank your final 10" : language === "zh-TW" ? "為10張卡片排出優先級" : "为10张卡片排出优先级" },
-            ].map((item) => (
-              <div key={item.step} className="flex items-center gap-3">
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                  style={{ backgroundColor: "#e74c6f" }}
-                >
-                  {item.step}
-                </div>
-                <span className="text-sm text-slate-600">{item.label}</span>
-              </div>
-            ))}
-          </motion.div>
 
           <motion.button
             onClick={handleStartTest}
@@ -356,10 +355,10 @@ export default function IdealCardTestPage() {
           {phase === "rank" && (
             <motion.div
               key="phase3"
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              transition={{ duration: 0.25 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
             >
               <RankPhase
                 cards={rankedCards}
@@ -400,30 +399,48 @@ export default function IdealCardTestPage() {
             </button>
           )}
           {phase === "select10" && (
-            <button
-              onClick={handleGoToRank}
-              disabled={selectedPhase2.size !== 10}
-              className={cn(
-                "w-full py-3.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 text-sm",
-                selectedPhase2.size === 10
-                  ? "text-white shadow-lg hover:shadow-xl hover:scale-[1.005] active:scale-[0.995]"
-                  : "bg-slate-200 text-slate-400 cursor-not-allowed"
-              )}
-              style={selectedPhase2.size === 10 ? { backgroundColor: "#e74c6f" } : {}}
-            >
-              {isEn ? "Continue to Ranking" : language === "zh-TW" ? "進入排序" : "进入排序"}
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleBackToPhase1}
+                className="flex items-center gap-1.5 px-4 py-3.5 rounded-xl font-semibold text-sm text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                {isEn ? "Previous" : language === "zh-TW" ? "上一步" : "上一步"}
+              </button>
+              <button
+                onClick={handleGoToRank}
+                disabled={selectedPhase2.size !== 10}
+                className={cn(
+                  "flex-1 py-3.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 text-sm",
+                  selectedPhase2.size === 10
+                    ? "text-white shadow-lg hover:shadow-xl hover:scale-[1.005] active:scale-[0.995]"
+                    : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                )}
+                style={selectedPhase2.size === 10 ? { backgroundColor: "#e74c6f" } : {}}
+              >
+                {isEn ? "Continue to Ranking" : language === "zh-TW" ? "進入排序" : "进入排序"}
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           )}
           {phase === "rank" && (
-            <button
-              onClick={handleComplete}
-              className="w-full py-3.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 text-sm text-white shadow-lg hover:shadow-xl hover:scale-[1.005] active:scale-[0.995]"
-              style={{ backgroundColor: "#e74c6f" }}
-            >
-              <Sparkles className="w-4 h-4" />
-              {isEn ? "Complete & View Results" : language === "zh-TW" ? "完成並查看結果" : "完成并查看结果"}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleBackToPhase2}
+                className="flex items-center gap-1.5 px-4 py-3.5 rounded-xl font-semibold text-sm text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                {isEn ? "Previous" : language === "zh-TW" ? "上一步" : "上一步"}
+              </button>
+              <button
+                onClick={handleComplete}
+                className="flex-1 py-3.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 text-sm text-white shadow-lg hover:shadow-xl hover:scale-[1.005] active:scale-[0.995]"
+                style={{ backgroundColor: "#e74c6f" }}
+              >
+                <Sparkles className="w-4 h-4" />
+                {isEn ? "Complete & View Results" : language === "zh-TW" ? "完成並查看結果" : "完成并查看结果"}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -500,11 +517,11 @@ function CardGrid({
             onClick={() => onToggle(card.id)}
             whileTap={{ scale: 0.96 }}
             className={cn(
-              "relative text-left rounded-xl border-2 transition-all p-3",
+              "relative text-left rounded-xl border transition-all p-3",
               isMobile ? "min-h-[64px]" : "min-h-[80px]",
               isSelected
-                ? "shadow-md"
-                : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm"
+                ? ""
+                : "bg-white hover:shadow-lg"
             )}
             style={
               isSelected
@@ -512,12 +529,21 @@ function CardGrid({
                   ? {
                       backgroundColor: categoryConfig.bgColor,
                       borderColor: categoryConfig.borderColor,
+                      borderWidth: 2,
+                      boxShadow: `0 4px 16px ${categoryConfig.color}30, 0 2px 4px ${categoryConfig.color}15`,
+                      transform: "translateY(-1px)",
                     }
                   : {
                       backgroundColor: "#fef2f2",
                       borderColor: "#e74c6f",
+                      borderWidth: 2,
+                      boxShadow: "0 4px 16px rgba(231,76,111,0.2), 0 2px 4px rgba(231,76,111,0.1)",
+                      transform: "translateY(-1px)",
                     }
-                : {}
+                : {
+                    borderColor: "#e2e8f0",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+                  }
             }
           >
             {/* Selected checkmark */}
@@ -569,12 +595,12 @@ function RankPhase({
   const isEn = language === "en";
 
   return (
-    <div className={cn("mx-auto", isMobile ? "max-w-full" : "max-w-lg")}>
+    <div className={cn("mx-auto", isMobile ? "max-w-full" : "max-w-2xl")}>
       <Reorder.Group
         axis="y"
         values={cards}
         onReorder={onReorder}
-        className="space-y-2"
+        className="flex flex-col gap-3"
       >
         {cards.map((card, index) => (
           <RankItem
@@ -587,7 +613,7 @@ function RankPhase({
         ))}
       </Reorder.Group>
 
-      <div className="mt-6 text-center">
+      <div className="mt-5 text-center">
         <p className="text-xs text-slate-400">
           {isEn
             ? "Drag cards to reorder — your #1 is your most important life value"
@@ -615,62 +641,89 @@ function RankItem({
   const label = getCardLabel(card, language as any);
   const categoryLabel = getCategoryLabel(card.category, language as any);
 
-  // Medal styling for top 3
-  const getMedalStyle = (rankNum: number) => {
-    if (rankNum === 1) return { bg: "linear-gradient(135deg, #FFD700, #FFA000)", text: "#5D4037" };
-    if (rankNum === 2) return { bg: "linear-gradient(135deg, #E0E0E0, #9E9E9E)", text: "#424242" };
-    if (rankNum === 3) return { bg: "linear-gradient(135deg, #FFCC80, #E65100)", text: "#3E2723" };
-    return null;
-  };
-
-  const medal = getMedalStyle(rank);
+  const isTopThree = rank >= 1 && rank <= 3;
 
   return (
     <Reorder.Item
       value={card}
-      className={cn(
-        "flex items-center gap-3 rounded-xl border-2 cursor-grab active:cursor-grabbing transition-shadow hover:shadow-md",
-        isMobile ? "p-3" : "p-4"
-      )}
-      style={{
-        backgroundColor: categoryConfig.bgColor,
-        borderColor: categoryConfig.borderColor,
-      }}
+      className="relative cursor-grab active:cursor-grabbing"
+      style={{ touchAction: "none" }}
       whileDrag={{
         scale: 1.03,
-        boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
         zIndex: 50,
+        boxShadow: `0 20px 40px ${categoryConfig.color}30, 0 8px 16px rgba(0,0,0,0.1)`,
       }}
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
     >
-      {/* Drag handle */}
-      <GripVertical className="w-4 h-4 text-slate-400 flex-shrink-0" />
-
-      {/* Rank number */}
+      {/* 3D card shell */}
       <div
-        className={cn(
-          "flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm",
-          !medal && "bg-white/70 text-slate-500"
-        )}
-        style={
-          medal
-            ? { background: medal.bg, color: medal.text }
-            : {}
-        }
+        className="relative rounded-2xl overflow-hidden transition-all duration-200 hover:-translate-y-0.5"
+        style={{
+          background: `linear-gradient(135deg, ${categoryConfig.bgColor} 0%, white 35%, ${categoryConfig.bgColor}cc 70%, ${categoryConfig.bgColor} 100%)`,
+          boxShadow: [
+            `0 1px 2px ${categoryConfig.color}08`,
+            `0 4px 12px ${categoryConfig.color}0c`,
+            `0 8px 28px ${categoryConfig.color}06`,
+            `inset 0 1px 0 rgba(255,255,255,0.85)`,
+            `inset 0 -1px 0 ${categoryConfig.color}0a`,
+          ].join(", "),
+          border: `1.5px solid ${categoryConfig.borderColor}70`,
+        }}
       >
-        {rank}
-      </div>
+        {/* Top light strip — glass highlight */}
+        <div
+          className="absolute inset-x-0 top-0 h-[2px]"
+          style={{
+            background: `linear-gradient(90deg, transparent 5%, ${categoryConfig.borderColor}80 30%, rgba(255,255,255,0.9) 50%, ${categoryConfig.borderColor}80 70%, transparent 95%)`,
+          }}
+        />
 
-      {/* Card info */}
-      <div className="flex-1 min-w-0">
-        <div className="font-semibold text-sm text-slate-800 truncate">{label}</div>
-        <div className="flex items-center gap-1.5 mt-0.5">
+        {/* Soft inner glow overlay */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: `radial-gradient(ellipse at 30% 0%, rgba(255,255,255,0.5) 0%, transparent 60%)`,
+          }}
+        />
+
+        <div className={cn("flex items-center gap-3 relative", isMobile ? "p-3.5" : "px-5 py-4")}>
+          {/* Drag handle */}
+          <GripVertical className="w-4 h-4 flex-shrink-0 opacity-30" style={{ color: categoryConfig.color }} />
+
+          {/* Rank badge */}
           <div
-            className="w-2 h-2 rounded-full flex-shrink-0"
-            style={{ backgroundColor: categoryConfig.color }}
-          />
-          <span className="text-xs" style={{ color: categoryConfig.color }}>
-            {categoryLabel}
-          </span>
+            className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-sm"
+            style={
+              isTopThree
+                ? {
+                    background: "linear-gradient(145deg, #FFD700 0%, #FFC107 45%, #FFA000 100%)",
+                    color: "#5D4037",
+                    boxShadow: "0 3px 10px rgba(255,160,0,0.4), 0 1px 2px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.6)",
+                    textShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                  }
+                : {
+                    background: "linear-gradient(145deg, rgba(255,255,255,0.95), rgba(255,255,255,0.7))",
+                    color: "#94a3b8",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9), 0 1px 4px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.03)",
+                  }
+            }
+          >
+            {rank}
+          </div>
+
+          {/* Card info */}
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-base text-slate-800 leading-tight truncate">{label}</div>
+            <div className="flex items-center gap-1.5 mt-1">
+              <div
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: categoryConfig.color }}
+              />
+              <span className="text-xs font-medium" style={{ color: categoryConfig.color }}>
+                {categoryLabel}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </Reorder.Item>

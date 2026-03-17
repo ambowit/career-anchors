@@ -56,7 +56,7 @@ export default function SSOConfigPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <div className="bg-card border border-border rounded-lg p-4">
           <div className="text-2xl font-bold text-foreground">{configs.length}</div>
           <div className="text-xs text-muted-foreground">{language === "en" ? "Total Configs" : language === "zh-TW" ? "設定總數" : "配置总数"}</div>

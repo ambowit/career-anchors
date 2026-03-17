@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -77,6 +77,11 @@ const TXT = {
     batchDesc: "Grant activity CP to multiple users at once",
     batchUserIds: "User Emails",
     batchUserIdsPlaceholder: "Enter user emails, one per line",
+    batchSearchUsers: "Search and select users",
+    batchSearchPlaceholder: "Search by name or email...",
+    batchSelectedUsers: "Selected Users",
+    batchSelectAll: "Select All",
+    batchDeselectAll: "Deselect All",
     batchCpAmount: "CP Amount",
     batchDescription: "Reason",
     batchDescPlaceholder: "Reason for batch grant",
@@ -152,6 +157,11 @@ const TXT = {
     batchDesc: "一次贈送活動 CP 給多位用戶",
     batchUserIds: "用戶 Email",
     batchUserIdsPlaceholder: "每行一個 Email",
+    batchSearchUsers: "搜尋並選擇用戶",
+    batchSearchPlaceholder: "搜尋姓名或 Email...",
+    batchSelectedUsers: "已選用戶",
+    batchSelectAll: "全選",
+    batchDeselectAll: "取消全選",
     batchCpAmount: "CP 數量",
     batchDescription: "原因",
     batchDescPlaceholder: "批次贈點原因",
@@ -178,7 +188,7 @@ const TXT = {
     noUsersInOrg: "此機構暫無用戶",
     selectedCount: "已選",
     grantType: "贈點類型",
-    bonus: "充值贈送 CP",
+    bonus: "儲值贈送 CP",
     activityCp: "活動獎勵 CP",
     grantToSelected: "贈送給已選用戶",
     orgUsers: "機構用戶",
@@ -226,6 +236,11 @@ const TXT = {
     batchDesc: "一次赠送活动 CP 给多位用户",
     batchUserIds: "用户 Email",
     batchUserIdsPlaceholder: "每行一个 Email",
+    batchSearchUsers: "搜索并选择用户",
+    batchSearchPlaceholder: "搜索姓名或 Email...",
+    batchSelectedUsers: "已选用户",
+    batchSelectAll: "全选",
+    batchDeselectAll: "取消全选",
     batchCpAmount: "CP 数量",
     batchDescription: "原因",
     batchDescPlaceholder: "批次赠点原因",
@@ -309,7 +324,9 @@ export default function RewardManagementPage() {
   const [batchEmails, setBatchEmails] = useState("");
   const [batchCpAmount, setBatchCpAmount] = useState<number>(10);
   const [batchDescription, setBatchDescription] = useState("");
-  const [batchResults, setBatchResults] = useState<Array<{ email: string; success: boolean; error?: string }> | null>(null);
+  const [batchResults, setBatchResults] = useState<Array<{ email: string; fullName?: string; success: boolean; error?: string }> | null>(null);
+  const [batchUserSearch, setBatchUserSearch] = useState("");
+  const [batchSelectedUserIds, setBatchSelectedUserIds] = useState<Set<string>>(new Set());
 
   // Organization grant states
   const [orgGrantExpanded, setOrgGrantExpanded] = useState(false);
@@ -322,26 +339,100 @@ export default function RewardManagementPage() {
   const [orgGrantReason, setOrgGrantReason] = useState("");
   const [showOrgConfirm, setShowOrgConfirm] = useState(false);
 
+  /* ---- All users query for batch grant selection ---- */
+
+  const { data: allUsersForBatch = [] } = useQuery({
+    queryKey: ["admin-all-users-for-batch"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, role_type")
+        .order("full_name", { ascending: true });
+      if (error) throw error;
+      return (data || []).map((profile: any) => ({
+        id: profile.id,
+        fullName: profile.full_name || "",
+        email: profile.email || "",
+        roleType: profile.role_type || "",
+      }));
+    },
+  });
+
+  const filteredBatchUsers = useMemo(() => {
+    if (!batchUserSearch.trim()) return allUsersForBatch;
+    const searchLower = batchUserSearch.toLowerCase();
+    return allUsersForBatch.filter((u: any) =>
+      u.fullName?.toLowerCase().includes(searchLower) || u.email?.toLowerCase().includes(searchLower)
+    );
+  }, [allUsersForBatch, batchUserSearch]);
+
+  const toggleBatchUser = useCallback((userId: string, email: string) => {
+    setBatchSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+    // Also sync emails textarea
+    setBatchEmails((prev) => {
+      const currentEmails = prev.split("\n").map((e) => e.trim()).filter(Boolean);
+      if (currentEmails.includes(email)) {
+        return currentEmails.filter((e) => e !== email).join("\n");
+      } else {
+        return [...currentEmails, email].join("\n");
+      }
+    });
+  }, []);
+
+  const toggleAllBatchUsers = useCallback(() => {
+    if (batchSelectedUserIds.size === filteredBatchUsers.length && filteredBatchUsers.length > 0) {
+      setBatchSelectedUserIds(new Set());
+      setBatchEmails("");
+    } else {
+      setBatchSelectedUserIds(new Set(filteredBatchUsers.map((u: any) => u.id)));
+      setBatchEmails(filteredBatchUsers.map((u: any) => u.email).join("\n"));
+    }
+  }, [filteredBatchUsers, batchSelectedUserIds.size]);
+
   /* ---- Organization queries ---- */
 
   const { data: organizations = [] } = useQuery({
-    queryKey: ["admin-organizations"],
+    queryKey: ["admin-organizations-all"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("organizations")
-        .select("id, name, short_code")
+        .select("id, name, domain, plan_type, status")
         .order("name", { ascending: true });
       if (error) throw error;
       return data || [];
     },
-    enabled: orgGrantExpanded,
+  });
+
+  // Fetch user counts per organization for display
+  const { data: orgUserCounts = {} } = useQuery({
+    queryKey: ["admin-org-user-counts", organizations.map((o: any) => o.id)],
+    queryFn: async () => {
+      const orgIds = organizations.map((o: any) => o.id);
+      if (orgIds.length === 0) return {};
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("organization_id")
+        .in("organization_id", orgIds);
+      if (error) throw error;
+      const countMap: Record<string, number> = {};
+      (data || []).forEach((profile: any) => {
+        countMap[profile.organization_id] = (countMap[profile.organization_id] || 0) + 1;
+      });
+      return countMap;
+    },
+    enabled: organizations.length > 0,
   });
 
   const filteredOrgs = useMemo(() => {
     if (!orgSearch.trim()) return organizations;
     const searchLower = orgSearch.toLowerCase();
     return organizations.filter((org: any) =>
-      org.name?.toLowerCase().includes(searchLower) || org.short_code?.toLowerCase().includes(searchLower)
+      org.name?.toLowerCase().includes(searchLower) || org.domain?.toLowerCase().includes(searchLower)
     );
   }, [organizations, orgSearch]);
 
@@ -350,17 +441,18 @@ export default function RewardManagementPage() {
     queryFn: async () => {
       if (!selectedOrgId) return [];
       const { data, error } = await supabase
-        .from("organization_members")
-        .select("user_id, role, profiles(id, full_name, email, avatar_url)")
+        .from("profiles")
+        .select("id, full_name, email, avatar_url, role_type, status")
         .eq("organization_id", selectedOrgId)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data || []).map((member: any) => ({
-        id: member.profiles?.id || member.user_id,
-        full_name: member.profiles?.full_name || "",
-        email: member.profiles?.email || "",
-        avatar_url: member.profiles?.avatar_url || "",
-        role: member.role,
+      return (data || []).map((profile: any) => ({
+        id: profile.id,
+        full_name: profile.full_name || "",
+        email: profile.email || "",
+        avatar_url: profile.avatar_url || "",
+        role: profile.role_type || "",
+        status: profile.status || "active",
       }));
     },
     enabled: !!selectedOrgId,
@@ -544,65 +636,41 @@ export default function RewardManagementPage() {
 
   const batchMutation = useMutation({
     mutationFn: async () => {
-      const emails = batchEmails
-        .split("\n")
-        .map((email) => email.trim())
-        .filter((email) => email.length > 0);
-
-      if (emails.length === 0 || batchCpAmount <= 0) {
+      const selectedIds = Array.from(batchSelectedUserIds);
+      if (selectedIds.length === 0 || batchCpAmount <= 0) {
         throw new Error("Invalid input");
       }
 
-      // Resolve emails to user IDs
-      const { data: profileMatches, error: profileError } = await supabase
-        .from("profiles")
-        .select("id, email")
-        .in("email", emails);
-
-      if (profileError) throw profileError;
-
-      const emailToIdMap: Record<string, string> = {};
-      (profileMatches || []).forEach((profile: any) => {
-        emailToIdMap[profile.email.toLowerCase()] = profile.id;
-      });
-
-      const resolvedUserIds: string[] = [];
-      const localResults: Array<{ email: string; success: boolean; error?: string }> = [];
-
-      emails.forEach((email) => {
-        const userId = emailToIdMap[email.toLowerCase()];
-        if (userId) {
-          resolvedUserIds.push(userId);
-        } else {
-          localResults.push({ email, success: false, error: txt.emailNotFound });
+      // Build ID -> user info map from allUsersForBatch
+      const idToUserMap = new Map<string, { email: string; fullName: string }>();
+      allUsersForBatch.forEach((u: any) => {
+        if (selectedIds.includes(u.id)) {
+          idToUserMap.set(u.id, { email: u.email, fullName: u.fullName });
         }
       });
 
-      if (resolvedUserIds.length > 0) {
-        const { data, error } = await supabase.functions.invoke("grant-reward", {
-          body: {
-            action: "batch_grant",
-            user_ids: resolvedUserIds,
-            cp_amount: batchCpAmount,
-            description: batchDescription || "Admin batch grant",
-          },
-        });
+      const { data, error } = await supabase.functions.invoke("grant-reward", {
+        body: {
+          action: "batch_grant",
+          user_ids: selectedIds,
+          cp_amount: batchCpAmount,
+          description: batchDescription || "Admin batch grant",
+        },
+      });
 
-        if (error) throw error;
+      if (error) throw error;
 
-        // Map results back to emails
-        if (data?.results) {
-          data.results.forEach((result: any) => {
-            const matchedEmail = Object.entries(emailToIdMap).find(
-              ([, id]) => id === result.user_id
-            );
-            localResults.push({
-              email: matchedEmail ? matchedEmail[0] : result.user_id,
-              success: result.success,
-              error: result.error,
-            });
+      const localResults: Array<{ email: string; fullName?: string; success: boolean; error?: string }> = [];
+      if (data?.results) {
+        data.results.forEach((result: any) => {
+          const userInfo = idToUserMap.get(result.user_id);
+          localResults.push({
+            email: userInfo?.email || result.user_id,
+            fullName: userInfo?.fullName,
+            success: result.success,
+            error: result.error,
           });
-        }
+        });
       }
 
       return localResults;
@@ -612,6 +680,8 @@ export default function RewardManagementPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-rewards"] });
       const successCount = results.filter((r) => r.success).length;
       toast.success(`${txt.batchSuccess}: ${successCount}/${results.length}`);
+      setBatchSelectedUserIds(new Set());
+      setBatchEmails("");
     },
     onError: (error: Error) => {
       toast.error(`${txt.batchError}: ${error.message}`);
@@ -764,6 +834,7 @@ export default function RewardManagementPage() {
                     <label className="block text-xs font-medium text-slate-600 mb-1.5">
                       <Building2 className="w-3.5 h-3.5 inline mr-1 opacity-60" />
                       {txt.selectOrg}
+                      <span className="text-slate-400 font-normal ml-1">({organizations.length})</span>
                     </label>
                     <div className="relative mb-2">
                       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -774,24 +845,43 @@ export default function RewardManagementPage() {
                         className="w-full pl-8 pr-3 py-2 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-200"
                       />
                     </div>
-                    <div className="border border-slate-200 rounded-lg max-h-[200px] overflow-y-auto">
+                    <div className="border border-slate-200 rounded-lg max-h-[280px] overflow-y-auto">
                       {filteredOrgs.length === 0 ? (
                         <div className="py-8 text-center text-xs text-slate-400">{txt.noOrgs}</div>
                       ) : (
-                        filteredOrgs.map((org: any) => (
-                          <button
-                            key={org.id}
-                            onClick={() => { setSelectedOrgId(org.id); setSelectedOrgUserIds(new Set()); }}
-                            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-violet-50 transition-colors border-b border-slate-100 last:border-0"
-                          >
-                            <Building2 className="w-4 h-4 text-violet-500 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-slate-700 truncate">{org.name}</p>
-                              {org.short_code && <p className="text-[10px] text-slate-400">{org.short_code}</p>}
-                            </div>
-                            <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-                          </button>
-                        ))
+                        filteredOrgs.map((org: any) => {
+                          const userCount = orgUserCounts[org.id] || 0;
+                          const statusColor = org.status === "active"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : org.status === "suspended"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-slate-100 text-slate-500";
+                          return (
+                            <button
+                              key={org.id}
+                              onClick={() => { setSelectedOrgId(org.id); setSelectedOrgUserIds(new Set()); }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-violet-50 transition-colors border-b border-slate-100 last:border-0"
+                            >
+                              <Building2 className="w-4 h-4 text-violet-500 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-xs font-medium text-slate-700 truncate">{org.name}</p>
+                                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0", statusColor)}>
+                                    {org.status}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  {org.domain && <span className="text-[10px] text-slate-400 truncate">{org.domain}</span>}
+                                  <span className="text-[10px] text-slate-400 flex-shrink-0">
+                                    <Users className="w-3 h-3 inline mr-0.5 opacity-60" />
+                                    {userCount}
+                                  </span>
+                                </div>
+                              </div>
+                              <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+                            </button>
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -865,7 +955,7 @@ export default function RewardManagementPage() {
                               <p className="text-[10px] text-slate-400 truncate">{orgUser.email}</p>
                             </div>
                             {orgUser.role && (
-                              <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-200">{orgUser.role}</Badge>
+                              <Badge variant="outline" className="text-[9px] px-1.5 h-5 border-slate-200">{orgUser.role}</Badge>
                             )}
                           </label>
                         ))
@@ -962,9 +1052,21 @@ export default function RewardManagementPage() {
                 <Send className="w-6 h-6 text-violet-600" />
               </div>
               <h3 className="text-base font-bold text-slate-800 mb-1">{txt.confirmGrant}</h3>
-              <p className="text-xs text-slate-500 mb-4">
+              <p className="text-xs text-slate-500 mb-2">
                 {selectedOrgUserIds.size} {txt.batchUserCount} · {orgGrantCpAmount} CP · {orgGrantType === "activity" ? txt.activityCp : txt.bonus}
               </p>
+              {/* Show selected user names */}
+              <div className="max-h-32 overflow-y-auto mb-4 text-left border border-slate-100 rounded-lg">
+                {orgUsers
+                  .filter((u: any) => selectedOrgUserIds.has(u.id))
+                  .map((u: any) => (
+                    <div key={u.id} className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-50 last:border-0">
+                      <Users className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                      <span className="text-xs font-medium text-slate-700 truncate">{u.full_name || "—"}</span>
+                      <span className="text-[10px] text-slate-400 truncate ml-auto">{u.email}</span>
+                    </div>
+                  ))}
+              </div>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowOrgConfirm(false)}
@@ -1018,20 +1120,66 @@ export default function RewardManagementPage() {
 
         {batchExpanded && (
           <div className="px-5 pb-5 border-t border-slate-100 pt-4 space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">
+            {/* User selection list */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-medium text-slate-600">
                   <Users className="w-3.5 h-3.5 inline mr-1 opacity-60" />
-                  {txt.batchUserIds}
+                  {txt.batchSearchUsers}
                 </label>
-                <textarea
-                  value={batchEmails}
-                  onChange={(event) => setBatchEmails(event.target.value)}
-                  placeholder={txt.batchUserIdsPlaceholder}
-                  rows={5}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400 resize-none"
+                {batchSelectedUserIds.size > 0 && (
+                  <span className="text-xs text-sky-600 font-medium">{batchSelectedUserIds.size} {txt.batchUserCount} {txt.selectedCount}</span>
+                )}
+              </div>
+              <div className="relative mb-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={batchUserSearch}
+                  onChange={(event) => setBatchUserSearch(event.target.value)}
+                  placeholder={txt.batchSearchPlaceholder}
+                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400"
                 />
               </div>
+              <div className="flex items-center justify-between mb-1">
+                <button
+                  type="button"
+                  onClick={toggleAllBatchUsers}
+                  className="text-[11px] text-sky-600 hover:text-sky-700 font-medium"
+                >
+                  {batchSelectedUserIds.size === filteredBatchUsers.length && filteredBatchUsers.length > 0 ? txt.batchDeselectAll : txt.batchSelectAll}
+                </button>
+                <span className="text-[11px] text-slate-400">{filteredBatchUsers.length} {txt.batchUserCount}</span>
+              </div>
+              <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto">
+                {filteredBatchUsers.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-xs text-slate-400">{txt.noRecords}</div>
+                ) : (
+                  filteredBatchUsers.map((batchUser: any) => (
+                    <label
+                      key={batchUser.id}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2 border-b border-slate-100 last:border-b-0 cursor-pointer hover:bg-slate-50 transition-colors",
+                        batchSelectedUserIds.has(batchUser.id) && "bg-sky-50/50"
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={batchSelectedUserIds.has(batchUser.id)}
+                        onChange={() => toggleBatchUser(batchUser.id, batchUser.email)}
+                        className="rounded border-slate-300 text-sky-600 focus:ring-sky-500/30 w-3.5 h-3.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-slate-700 truncate">{batchUser.fullName || batchUser.email}</div>
+                        <div className="text-[11px] text-slate-400 truncate">{batchUser.email}</div>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">
@@ -1062,7 +1210,7 @@ export default function RewardManagementPage() {
             <div className="flex items-center justify-end">
               <button
                 onClick={() => batchMutation.mutate()}
-                disabled={batchMutation.isPending || !batchEmails.trim() || batchCpAmount <= 0}
+                disabled={batchMutation.isPending || batchSelectedUserIds.size === 0 || batchCpAmount <= 0}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {batchMutation.isPending ? (
@@ -1089,14 +1237,19 @@ export default function RewardManagementPage() {
                       key={index}
                       className="flex items-center justify-between px-4 py-2 border-b border-slate-100 last:border-b-0 text-xs"
                     >
-                      <span className="font-mono text-slate-600">{result.email}</span>
+                      <div className="flex-1 min-w-0">
+                        {result.fullName && (
+                          <p className="text-xs font-medium text-slate-700 truncate">{result.fullName}</p>
+                        )}
+                        <p className="font-mono text-slate-500 text-[11px] truncate">{result.email}</p>
+                      </div>
                       {result.success ? (
-                        <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px]">
+                        <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px] ml-2 flex-shrink-0">
                           <CheckCircle2 className="w-3 h-3 mr-1" />
                           {txt.succeeded}
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700 text-[10px]">
+                        <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700 text-[10px] ml-2 flex-shrink-0">
                           <XCircle className="w-3 h-3 mr-1" />
                           {result.error || txt.failed}
                         </Badge>
@@ -1220,7 +1373,7 @@ export default function RewardManagementPage() {
                         >
                           {getTypeLabel(reward.reward_type)}
                         </Badge>
-                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-200 text-slate-400">
+                        <Badge variant="outline" className="text-[9px] px-1.5 h-5 border-slate-200 text-slate-400">
                           {REWARD_CATEGORIES[reward.reward_type] === "activity" ? txt.activityReward : txt.consumptionReward}
                         </Badge>
                       </div>

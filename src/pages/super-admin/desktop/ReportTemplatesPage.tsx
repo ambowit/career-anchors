@@ -21,7 +21,7 @@ const TXT = {
     pageDesc: "Create and manage report templates for all assessment types",
     createTemplate: "New Template",
     allCategories: "All",
-    lifeCard: "Life Card",
+    lifeCard: "Espresso Card",
     careerAnchor: "Career Anchor",
     combined: "Combined",
     searchPlaceholder: "Search templates...",
@@ -139,7 +139,7 @@ const TXT = {
     SCORE_RANGE_MATCH: "分數區間匹配",
     DUAL_MATCH: "雙錨匹配",
     TRI_MATCH: "三錨匹配",
-    FUSION_MATCH: "融合匹配",
+    FUSION_MATCH: "整合匹配",
     CHART_BLOCK: "圖表",
     TABLE_BLOCK: "表格",
     USER_INFO_BLOCK: "封面資訊",
@@ -206,7 +206,7 @@ const TXT = {
     SCORE_RANGE_MATCH: "分数区间匹配",
     DUAL_MATCH: "双锚匹配",
     TRI_MATCH: "三锚匹配",
-    FUSION_MATCH: "融合匹配",
+    FUSION_MATCH: "整合匹配",
     CHART_BLOCK: "图表",
     TABLE_BLOCK: "表格",
     USER_INFO_BLOCK: "封面信息",
@@ -304,7 +304,7 @@ function getDefaultSections(category: TemplateCategory): Omit<SectionRow, "id" |
   // COMBINED
   return [
     { ...base, section_name: "封面資訊", section_name_en: "Cover Info", display_order: 0, section_type: "USER_INFO_BLOCK" },
-    { ...base, section_name: "融合定位", section_name_en: "Fusion Positioning", display_order: 1, section_type: "FUSION_MATCH", mapping_key: "fusion_position" },
+    { ...base, section_name: "整合定位", section_name_en: "Fusion Positioning", display_order: 1, section_type: "FUSION_MATCH", mapping_key: "fusion_position" },
     { ...base, section_name: "驅動力匹配", section_name_en: "Drive Match", display_order: 2, section_type: "FUSION_MATCH", mapping_key: "drive_match" },
     { ...base, section_name: "衝突風險", section_name_en: "Conflict Risk", display_order: 3, section_type: "STATIC_TEXT" },
     { ...base, section_name: "發展路徑", section_name_en: "Development Path", display_order: 4, section_type: "STATIC_TEXT" },
@@ -695,7 +695,7 @@ export default function ReportTemplatesPage() {
               >
                 {/* Category badge */}
                 <div className="flex items-center justify-between mb-3">
-                  <Badge variant="outline" className={cn("text-[10px] px-2 py-0.5 gap-1", catCfg.color)}>
+                  <Badge variant="outline" className={cn("text-[10px] px-2 h-6 gap-1", catCfg.color)}>
                     <catCfg.icon className="w-3 h-3" />
                     {getCategoryLabel(tpl.template_category)}
                   </Badge>
@@ -1106,7 +1106,7 @@ function SectionEditorModal({
                   <span className="text-xs text-slate-400 font-mono w-5">{idx + 1}</span>
                   <IconCmp className="w-4 h-4 text-slate-500 flex-shrink-0" />
                   <span className="text-sm font-medium text-slate-700 flex-1 truncate">{sec.section_name}</span>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-200 text-slate-400">
+                  <Badge variant="outline" className="text-[10px] px-1.5 h-5 border-slate-200 text-slate-400">
                     {(txt as Record<string, string>)[sec.section_type] || sec.section_type}
                   </Badge>
                   {sec.is_locked && <Lock className="w-3 h-3 text-amber-500" />}

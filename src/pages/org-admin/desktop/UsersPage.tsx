@@ -74,7 +74,12 @@ export default function OrgUsersPage() {
 
   const allUsers = users || [];
   const filtered = allUsers.filter((user) => {
-    const matchesSearch = (user.full_name || "").toLowerCase().includes(searchQuery.toLowerCase()) || (user.email || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return !selectedRole || user.role_type === selectedRole;
+    const nameMatch = (user.full_name || "").toLowerCase().includes(query);
+    const emailMatch = (user.email || "").toLowerCase().includes(query);
+    const phoneMatch = (user.phone || "").toLowerCase().includes(query);
+    const matchesSearch = nameMatch || emailMatch || phoneMatch;
     const matchesRole = !selectedRole || user.role_type === selectedRole;
     return matchesSearch && matchesRole;
   });
@@ -209,11 +214,16 @@ export default function OrgUsersPage() {
 
   const handleDeleteUser = async () => {
     if (!deletingUser) return;
-    await deleteMutation.mutateAsync(deletingUser.id);
-    toast.success(language === "en" ? "User deleted" : language === "zh-TW" ? "使用者已刪除" : "用户已删除");
-    setDeletingUser(null);
-    setModalMode(null);
-    queryClient.invalidateQueries({ queryKey: ["org"] });
+    try {
+      await deleteMutation.mutateAsync(deletingUser.id);
+      toast.success(language === "en" ? "User deleted" : language === "zh-TW" ? "使用者已刪除" : "用户已删除");
+      setDeletingUser(null);
+      setModalMode(null);
+      queryClient.invalidateQueries({ queryKey: ["org"] });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(language === "en" ? `Delete failed: ${errorMessage}` : language === "zh-TW" ? `刪除失敗：${errorMessage}` : `删除失败：${errorMessage}`);
+    }
   };
 
   // Parse CSV/text for batch import
@@ -308,9 +318,6 @@ export default function OrgUsersPage() {
         <div className="flex items-center gap-3">
           <button onClick={() => { setModalMode("import"); setImportText(""); setImportResults(null); }} className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground">
             <Upload className="w-4 h-4" /> {language === "en" ? "Batch Import" : language === "zh-TW" ? "批次匯入" : "批量导入"}
-          </button>
-          <button onClick={handleDownloadTemplate} className="flex items-center gap-2 px-4 py-2.5 bg-card border border-border rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground">
-            <Download className="w-4 h-4" /> {language === "en" ? "Export" : language === "zh-TW" ? "匯出" : "导出"}
           </button>
           <button onClick={() => setModalMode("add")} className="flex items-center gap-2 px-4 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-sm font-medium">
             <Plus className="w-4 h-4" /> {language === "en" ? "Add User" : language === "zh-TW" ? "新增使用者" : "新增用户"}

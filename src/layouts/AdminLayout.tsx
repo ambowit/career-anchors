@@ -11,7 +11,8 @@ import {
   PanelLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useTestAuth, TEST_ACCOUNTS, type LanguageKey } from "@/hooks/useTestAuth";
+import { useTestAuth } from "@/hooks/useTestAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useLanguage";
 import { useSidebarCollapse } from "@/hooks/useSidebarCollapse";
 import LanguageSwitcher from "@/components/desktop/LanguageSwitcher";
@@ -24,6 +25,7 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const { t, language } = useTranslation();
   const { testLogout, testRole } = useTestAuth();
+  const { user, profile } = useAuth();
   const { isCollapsed, toggleCollapse } = useSidebarCollapse();
 
   const navItems = [
@@ -125,7 +127,7 @@ export default function AdminLayout() {
                 {language === "en" ? "Current Account" : language === "zh-TW" ? "當前帳戶" : "当前账户"}
               </div>
               <div className="text-white text-sm font-semibold truncate">
-                {TEST_ACCOUNTS[testRole]?.name[language as LanguageKey] ?? testRole}
+                {profile?.full_name || user?.email?.split("@")[0] || testRole}
               </div>
             </div>
           )}
@@ -186,7 +188,7 @@ export default function AdminLayout() {
           </div>
           <LanguageSwitcher />
         </div>
-        <div className="p-8">
+        <div className="p-8 admin-page-content">
           <Outlet />
         </div>
       </main>

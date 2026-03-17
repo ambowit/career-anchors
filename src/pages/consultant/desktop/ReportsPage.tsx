@@ -5,7 +5,9 @@ import { useTranslation } from "@/hooks/useLanguage";
 import { toast } from "sonner";
 import { AnimatePresence } from "framer-motion";
 import { useConsultantReports } from "@/hooks/useAdminData";
-import { downloadHtmlAsPdf } from "@/lib/exportReport";
+import { downloadV3ReportAsPdf, assessmentResultToV3Params } from "@/lib/reportV3Download";
+import { generateV3Report } from "@/lib/reportV3Generator";
+import type { LangKey } from "@/lib/reportDataFetcher";
 
 interface ReportRow {
   id: string;
@@ -23,7 +25,9 @@ export default function ConsultantReportsPage() {
   const { language } = useTranslation();
   const { data: rawReports, isLoading } = useConsultantReports();
   const [searchQuery, setSearchQuery] = useState("");
-  const [previewReport, setPreviewReport] = useState<ReportRow | null>(null);
+  const [previewReportMeta, setPreviewReportMeta] = useState<ReportRow | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [sendingReport, setSendingReport] = useState<ReportRow | null>(null);
   const [sendEmail, setSendEmail] = useState("");
 
@@ -49,16 +53,7 @@ export default function ConsultantReportsPage() {
     LS: language === "en" ? "Lifestyle" : "生活型",
   };
 
-  const anchorFullLabels: Record<string, string> = {
-    TF: language === "en" ? "Technical/Functional Competence" : language === "zh-TW" ? "技術/專業能力型" : "技术/专业能力型",
-    GM: language === "en" ? "General Management" : "管理型",
-    AU: language === "en" ? "Autonomy/Independence" : language === "zh-TW" ? "自主/獨立型" : "自主/独立型",
-    SE: language === "en" ? "Security/Stability" : language === "zh-TW" ? "安全/穩定型" : "安全/稳定型",
-    EC: language === "en" ? "Entrepreneurial Creativity" : language === "zh-TW" ? "創業/創造型" : "创业/创造型",
-    SV: language === "en" ? "Service/Dedication" : language === "zh-TW" ? "服務/奉獻型" : "服务/奉献型",
-    CH: language === "en" ? "Pure Challenge" : language === "zh-TW" ? "挑戰型" : "挑战型",
-    LS: language === "en" ? "Lifestyle Integration" : "生活方式整合型",
-  };
+
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toISOString().slice(0, 10);
@@ -92,95 +87,68 @@ export default function ConsultantReportsPage() {
 
   const filteredReports = reports.filter((report) => !searchQuery || report.client.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  const generateReportHTML = (report: ReportRow): string => {
-    const isEn = language === "en";
-    const isZhTW = language === "zh-TW";
-    const scores = report.scores;
-    const sortedScores = Object.entries(scores).sort(([, scoreA], [, scoreB]) => scoreB - scoreA);
-    const topScore = sortedScores[0]?.[1] || 100;
 
-    const scoreRows = sortedScores.map(([code, score]) => `
-      <tr>
-        <td style="padding: 12px; border-bottom: 1px solid #eee;">${anchorFullLabels[code] || code}</td>
-        <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right;">
-          <div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px;">
-            <div style="width: 200px; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden;">
-              <div style="width: ${Math.min((score / topScore) * 100, 100)}%; height: 100%; background: ${score >= 80 ? '#22c55e' : score >= 65 ? '#eab308' : '#94a3b8'}; border-radius: 4px;"></div>
-            </div>
-            <span style="min-width: 40px; font-weight: 600;">${score.toFixed(0)}</span>
-          </div>
-        </td>
-      </tr>
-    `).join("");
 
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>${isEn ? "Career Anchor Assessment Report" : isZhTW ? "職業錨測評報告" : "职业锚测评报告"} — ${report.client}</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
-      max-width: 800px; margin: 0 auto; padding: 40px 24px;
-      background: #fff; color: #1a1a1a;
-    }
-    @media print { body { padding: 20px; } }
-  </style>
-</head>
-<body>
-  <header style="text-align: center; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 2px solid #eee;">
-    <h1 style="margin: 0; font-size: 28px; color: #1a365d;">${isEn ? "Career Anchor Assessment Report" : isZhTW ? "職業錨測評報告" : "职业锚测评报告"}</h1>
-    <p style="margin: 8px 0 0; color: #64748b; font-size: 16px;">${report.client}</p>
-    <p style="margin: 8px 0 0; color: #94a3b8; font-size: 14px;">${isEn ? "Assessment Date" : isZhTW ? "測評日期" : "测评日期"}: ${report.assessmentDate} | ${isEn ? "Report Date" : isZhTW ? "報告日期" : "报告日期"}: ${report.reportDate}</p>
-  </header>
-
-  <section style="margin-bottom: 32px;">
-    <div style="display: flex; gap: 24px; flex-wrap: wrap;">
-      <div style="flex: 1; min-width: 200px; padding: 24px; background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%); border-radius: 12px; color: white;">
-        <p style="margin: 0 0 8px; font-size: 14px; opacity: 0.8;">${isEn ? "High-Sensitivity Anchor" : isZhTW ? "高敏感錨" : "高敏感锚"}</p>
-        <p style="margin: 0; font-size: 24px; font-weight: 700;">${anchorFullLabels[report.anchor] || report.anchor}</p>
-        <p style="margin: 8px 0 0; font-size: 32px; font-weight: 800;">${(scores[report.anchor] || 0).toFixed(0)}</p>
-      </div>
-    </div>
-  </section>
-
-  <section style="margin-bottom: 32px;">
-    <h2 style="margin: 0 0 16px; font-size: 18px; color: #334155;">${isEn ? "Dimension Scores" : isZhTW ? "維度得分" : "维度得分"}</h2>
-    <table style="width: 100%; border-collapse: collapse;">
-      <tbody>${scoreRows}</tbody>
-    </table>
-  </section>
-
-  <section style="margin-bottom: 32px; padding: 20px; background: #f0fdf4; border-radius: 12px;">
-    <h3 style="margin: 0 0 12px; color: #166534;">${isEn ? "Consultant Notes" : isZhTW ? "諮詢師備註" : "咨询师备注"}</h3>
-    <p style="margin: 0; color: #15803d; font-size: 14px; line-height: 1.8;">
-      ${isEn ? `The client's primary career anchor is ${anchorFullLabels[report.anchor]}. This indicates a strong preference for this career orientation. Further discussion during consultation sessions is recommended to explore alignment with current career trajectory.` : isZhTW ? `客戶的主要職業錨為${anchorFullLabels[report.anchor]}，表明該維度在職業決策中佔據核心地位。建議在後續諮詢中進一步探討該錨定與當前職業發展路徑的匹配程度。` : `客户的主要职业锚为${anchorFullLabels[report.anchor]}，表明该维度在职业决策中占据核心地位。建议在后续咨询中进一步探讨该锚定与当前职业发展路径的匹配程度。`}
-    </p>
-  </section>
-
-  <footer style="margin-top: 48px; padding-top: 24px; border-top: 1px solid #eee; text-align: center; color: #94a3b8; font-size: 12px;">
-    <p>SCPC Career Anchor Assessment System — ${isEn ? "Consultant Report" : isZhTW ? "諮詢師報告" : "咨询师报告"}</p>
-  </footer>
-</body>
-</html>`.trim();
-  };
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const handleDownload = async (report: ReportRow) => {
-    const html = generateReportHTML(report);
+    setDownloadingId(report.id);
     try {
-      
-      const pdfFilename = `${report.client}-${language === "en" ? "report" : language === "zh-TW" ? "測評報告" : "测评报告"}-${report.assessmentDate}.pdf`;
-      await downloadHtmlAsPdf(html, pdfFilename);
+      // Find the raw record to get user_id for V3 params
+      const rawRecord = (rawReports || []).find((r) => r.id === report.id);
+      if (!rawRecord) throw new Error("Record not found");
+
+      const v3Params = assessmentResultToV3Params(
+        rawRecord as any,
+        report.client,
+        "mid",
+        null,
+        language as LangKey,
+      );
+      await downloadV3ReportAsPdf(v3Params);
       toast.success(language === "en" ? "Report downloaded" : language === "zh-TW" ? "報告已下載" : "报告已下载");
     } catch {
       toast.error(language === "en" ? "Download failed" : language === "zh-TW" ? "下載失敗" : "下载失败");
+    } finally {
+      setDownloadingId(null);
     }
   };
 
-  const handlePreview = (report: ReportRow) => {
-    setPreviewReport(report);
+  const handlePreview = async (report: ReportRow) => {
+    setPreviewReportMeta(report);
+    setPreviewHtml(null);
+    setPreviewLoading(true);
+    try {
+      const rawRecord = (rawReports || []).find((r) => r.id === report.id);
+      if (!rawRecord) throw new Error("Record not found");
+      const v3Params = assessmentResultToV3Params(
+        rawRecord as any,
+        report.client,
+        "mid",
+        null,
+        language as LangKey,
+      );
+      const output = await generateV3Report(
+        {
+          scores: v3Params.scores,
+          careerStage: v3Params.careerStage,
+          userName: v3Params.userName,
+          workExperienceYears: v3Params.workExperienceYears,
+          userId: v3Params.userId,
+          reportVersion: "professional",
+          reportType: "career_anchor",
+        },
+        v3Params.language || "zh-CN",
+        undefined,
+        { showWeights: false },
+      );
+      setPreviewHtml(output.bodyHtml);
+    } catch {
+      toast.error(language === "en" ? "Preview failed" : language === "zh-TW" ? "預覽失敗" : "预览失败");
+      setPreviewReportMeta(null);
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   const handleSend = (report: ReportRow) => {
@@ -221,7 +189,7 @@ export default function ConsultantReportsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-5 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 mb-6">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-xl p-5 flex items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center"><FileText className="w-5 h-5" /></div>
           <div>
@@ -263,7 +231,7 @@ export default function ConsultantReportsPage() {
             <thead>
               <tr className="border-b border-border bg-muted/5">
                 <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">{language === "en" ? "Client" : language === "zh-TW" ? "客戶" : "客户"}</th>
-                <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">{language === "en" ? "High-Sens Anchor" : language === "zh-TW" ? "高敏感錨" : "高敏感锚"}</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">{language === "en" ? "Core Anchor" : language === "zh-TW" ? "核心錨" : "核心锚"}</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">{language === "en" ? "Assessment Date" : language === "zh-TW" ? "測評日期" : "测评日期"}</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">{language === "en" ? "Report Date" : language === "zh-TW" ? "報告日期" : "报告日期"}</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">{language === "en" ? "Status" : language === "zh-TW" ? "狀態" : "状态"}</th>
@@ -301,10 +269,11 @@ export default function ConsultantReportsPage() {
                       </button>
                       <button
                         onClick={() => handleDownload(report)}
-                        className="p-1.5 rounded-lg hover:bg-muted/20 text-muted-foreground hover:text-foreground transition-colors"
-                        title={language === "en" ? "Download" : language === "zh-TW" ? "下載" : "下载"}
+                        disabled={downloadingId === report.id}
+                        className="p-1.5 rounded-lg hover:bg-muted/20 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                        title={language === "en" ? "Complete Report" : language === "zh-TW" ? "完整報告" : "完整报告"}
                       >
-                        <Download className="w-4 h-4" />
+                        {downloadingId === report.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                       </button>
                       {report.status === "ready" && (
                         <button
@@ -326,48 +295,58 @@ export default function ConsultantReportsPage() {
 
       {/* Report Preview Modal */}
       <AnimatePresence>
-        {previewReport && (
+        {previewReportMeta && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-8"
-            onClick={() => setPreviewReport(null)}
+            onClick={() => { setPreviewReportMeta(null); setPreviewHtml(null); }}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col"
+              className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card">
                 <div className="flex items-center gap-3">
                   <FileText className="w-5 h-5 text-emerald-600" />
                   <div>
-                    <div className="font-semibold text-foreground text-sm">{previewReport.client}</div>
-                    <div className="text-xs text-muted-foreground">{anchorLabels[previewReport.anchor]} · {previewReport.assessmentDate}</div>
+                    <div className="font-semibold text-foreground text-sm">{previewReportMeta.client}</div>
+                    <div className="text-xs text-muted-foreground">{anchorLabels[previewReportMeta.anchor]} · {previewReportMeta.assessmentDate}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleDownload(previewReport)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-xs font-medium hover:bg-emerald-600 transition-colors"
+                    onClick={() => handleDownload(previewReportMeta)}
+                    disabled={downloadingId === previewReportMeta.id}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-xs font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    {language === "en" ? "Download" : language === "zh-TW" ? "下載" : "下载"}
+                    {downloadingId === previewReportMeta.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                    {language === "en" ? "Complete Report" : language === "zh-TW" ? "完整報告" : "完整报告"}
                   </button>
-                  <button onClick={() => setPreviewReport(null)} className="p-1.5 hover:bg-muted/20 rounded-lg">
+                  <button onClick={() => { setPreviewReportMeta(null); setPreviewHtml(null); }} className="p-1.5 hover:bg-muted/20 rounded-lg">
                     <X className="w-4 h-4 text-muted-foreground" />
                   </button>
                 </div>
               </div>
               <div className="flex-1 overflow-auto">
-                <iframe
-                  srcDoc={generateReportHTML(previewReport)}
-                  className="w-full h-full min-h-[60vh] border-0"
-                  title="Report Preview"
-                />
+                {previewLoading ? (
+                  <div className="flex flex-col items-center justify-center py-24 gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+                    <p className="text-sm text-muted-foreground">
+                      {language === "en" ? "Generating report preview..." : language === "zh-TW" ? "正在生成報告預覽..." : "正在生成报告预览..."}
+                    </p>
+                  </div>
+                ) : previewHtml ? (
+                  <iframe
+                    srcDoc={previewHtml}
+                    className="w-full h-full min-h-[70vh] border-0"
+                    title="Report Preview"
+                  />
+                ) : null}
               </div>
             </motion.div>
           </motion.div>

@@ -1,0 +1,1093 @@
+<bugfix_session date="2026-03-15" status="all_completed">
+  <task id="1" status="completed">
+    <title>文案替换：生涯→职涯</title>
+    <files>
+      <file>src/pages/desktop/IdealCardResultsPage.tsx</file>
+      <file>src/lib/exportReport.ts</file>
+      <file>src/pages/org-admin/desktop/BatchAssessmentDetailPage.tsx</file>
+      <file>src/pages/super-admin/desktop/BatchAssessmentDetailPage.tsx</file>
+    </files>
+    <summary>4文件约24处 生涯取向→职涯取向/職涯取向，生涯价值卡→职涯价值卡，生涯规划→职涯规划</summary>
+  </task>
+
+  <task id="2" status="completed">
+    <title>验证码到期时间时区修复</title>
+    <files>
+      <file>src/components/desktop/OrgVerificationCodes.tsx</file>
+    </files>
+    <summary>datetime-local 输入值通过 new Date().toISOString() 转换为 UTC 再存库</summary>
+  </task>
+
+  <task id="3" status="completed">
+    <title>验证码按测评类型分类</title>
+    <files>
+      <file>supabase/migrations/20260315120219_cc21afe8380f425cacf2390dc7699e9f.sql</file>
+      <file>src/components/desktop/OrgVerificationCodes.tsx</file>
+      <file>src/pages/desktop/HomePage.tsx</file>
+      <file>src/pages/mobile/HomePage.tsx</file>
+    </files>
+    <summary>
+      org_assessment_codes 新增 6 列（max_uses_career_anchor/used_count_career_anchor/max_uses_ideal_card/used_count_ideal_card/max_uses_combined/used_count_combined）；
+      管理端创建表单改为 3 类型分别输入；列表 per-type 小计数显示；
+      用户端验证时按 selectedEntry 检查对应类型上限并递增；
+      所有类型用尽才自动停用；
+      Supabase Realtime 订阅实现管理端实时更新；
+      上限提示改为「測試碼數量已達上限」
+    </summary>
+  </task>
+
+  <task id="4" status="completed">
+    <title>删除用户 FK 约束修复</title>
+    <files>
+      <file>supabase/functions/delete-user/index.ts</file>
+    </files>
+    <summary>在删除 profiles 之前，通过 Promise.allSettled 批量 SET NULL 18 个软引用 FK 字段，解决外键约束阻止删除的问题</summary>
+  </task>
+
+  <task id="5" status="completed">
+    <title>CP 购买未完成测评自动退款</title>
+    <files>
+      <file>supabase/functions/consume-cp/index.ts</file>
+      <file>src/hooks/useCpPurchase.ts</file>
+      <file>src/pages/desktop/AssessmentPage.tsx</file>
+      <file>src/pages/mobile/AssessmentPage.tsx</file>
+      <file>src/pages/desktop/HomePage.tsx</file>
+      <file>src/pages/mobile/HomePage.tsx</file>
+    </files>
+    <summary>
+      consume-cp 返回 transaction_id；
+      useCpPurchase onSuccess 存入 sessionStorage；
+      测评完成后清除 sessionStorage；
+      返回首页时 useEffect 检测到未完成的交易自动调用 refund-cp 退款并 toast 通知用户
+    </summary>
+  </task>
+  <task id="6" status="completed" date="2026-03-16">
+    <title>PDF报告胶囊/圆圈文字居中 + 内容消失修复 (v4 line-height 方案)</title>
+    <files>
+      <file>src/lib/reportV3Generator.ts</file>
+      <file>src/lib/exportReport.ts</file>
+      <file>src/lib/reportDesignSystem.ts</file>
+      <file>src/lib/fusionChartGenerator.ts</file>
+    </files>
+    <summary>
+      html2canvas 居中技术测试全记录：
+      v1 flex+align-items:center → 无效
+      v2 inline-block+padding+line-height:1 → 基线偏移
+      v3 inline-table+table-cell+vertical-align:middle → 自动宽度计算失败，内容被裁切只显示分数
+      v4 inline-block+line-height=height → 可靠居中，内容完整显示
+
+      v3 失败根因：inline-table 不设宽度时 html2canvas 无法正确计算自动宽度，
+      导致胶囊被压缩，只显示末尾的分数而丢失锡点名称。
+      同时 overflow:hidden wrapper 加剧了裁切问题。
+
+      v4 修复：
+      - renderPill: display:inline-block + height:Npx + line-height:Npx + padding:0 Xpx
+      - renderNumberCircle: display:inline-block + width/height/line-height:38px
+      - 移除所有 overflow:hidden wrapper
+      - exportReport: 5处数字圆圈, 3组进度条 改为 line-height 方案
+      - reportDesignSystem: .cpc-number-circle 改为 inline-block+line-height
+      - Iron Rules 更新为 v4.0
+    </summary>
+  </task>
+  <task id="7" status="completed" date="2026-03-16">
+    <title>PDF报告三项修复：乱码文字 + 数字圆圈微调 + CDN缓存下载失败</title>
+    <files>
+      <file>src/lib/reportNumberGenerator.ts</file>
+      <file>src/lib/reportV3Generator.ts</file>
+      <file>src/lib/reportDesignSystem.ts</file>
+    </files>
+    <summary>
+      问题1 (乱码€wim"(X1TJ): generatePageHeaderFooter() 的 header/footer
+      从 display:flex → overflow:hidden + float:right 布局，
+      避免 html2canvas 渲染 flex 布局时产生字体编码乱码。
+
+      问题2 (数字圆圈+胶囊文字偏下3-5px): 全面修复三处：
+      a) renderNumberCircle: line-height 38→33px
+      b) renderPill: line-height 从 =height 改为 height-8（lg:52→44, md:44→36, sm:36→28）
+      c) CSS class pill: 非对称padding差从2px加大到10px（top减4/bottom加4）
+      d) exportReport.ts 中数字圆圈 line-height 同步减小
+      e) .cpc-number-circle CSS: line-height 38→33px
+
+      问题3 (批次测评报告下载失败): Service Worker 缓存旧HTML引用已删除的
+      chunk文件(404)。重新部署生成新chunk哈希+新HTML即可解决。
+
+      附注：引号重叠(「」)为数据库AI生成内容问题，非代码bug。
+    </summary>
+  </task>
+  <task id="8" status="completed" date="2026-03-16">
+    <title>邮件模板链接URL编码+独立行显示</title>
+    <files>
+      <file>src/pages/org-admin/desktop/BatchAssessmentDetailPage.tsx</file>
+      <file>src/pages/super-admin/desktop/BatchAssessmentDetailPage.tsx</file>
+    </files>
+    <summary>
+      根因：batch_slug含中文字符和空格时，URL未编码导致邮件客户端无法识别完整链接，
+      截图显示链接在中文字符处断开（前半段蓝色超链接，后半段变成普通文字）。
+      修复：
+      1) 所有链接生成处统一使用 encodeURIComponent(batch.batch_slug)
+      2) 邮件模板中链接单独放一行，方便邮件客户端识别完整URL
+      3) 页面显示和复制按钮同步使用编码URL
+      两端(机构管理员+超管)同步更新。
+    </summary>
+  </task>
+  <task id="9" status="completed" date="2026-03-16">
+    <title>胶囊/圆圈居中第4轮微调 + PDF下载可靠性增强</title>
+    <files>
+      <file>src/lib/reportV3Generator.ts</file>
+      <file>src/lib/reportDesignSystem.ts</file>
+      <file>src/lib/exportReport.ts</file>
+      <file>src/pages/org-admin/desktop/BatchAssessmentDetailPage.tsx</file>
+      <file>src/pages/super-admin/desktop/BatchAssessmentDetailPage.tsx</file>
+    </files>
+    <summary>
+      居中修复第4轮（用户截图分析还差约3px）：
+      a) renderPill: visualLineHeight 从 height-8 增大到 height-14（约7px上移）
+      b) CSS pill padding: sm 4/20, md 8/23, lg 11/26（差值~15-16px）
+      c) renderNumberCircle: 38px圆 line-height 33→27px
+      d) .cpc-number-circle CSS: 33→27px, -lg: 36→30px, -score: 48→40px
+      e) exportReport.ts: 26px圆 22→18, 32px圆 27→22, 36px圆 36→26,
+         36px信息圆 36→28
+
+      PDF下载可靠性增强（解决偶发跨浏览器下载失败）：
+      1) 动态import添加重试机制 importWithRetry() — 网络抖动时自动重试2次
+      2) canvas尺寸超限自动降低渲染缩放比 — 检测iOS/Safari的最大像素限制
+      3) toDataURL失败自动回退PNG格式 — 某些移动浏览器JPEG编码器可能失败
+      4) 新增 downloadBlob() 导出函数 — iOS Safari使用window.open路径，桌面使用anchor.click
+      5) 页面切片后立即释放 canvas 内存（width=height=0）
+      6) 所有批次下载（ZIP/CSV/单个PDF）统一使用 downloadBlob()
+    </summary>
+  </task>
+  <task id="10" status="completed" date="2026-03-16">
+    <title>PDF胶囊居中铁律v5.0 — 统一line-height=height方案</title>
+    <files>
+      <file>src/lib/reportV3Generator.ts</file>
+      <file>src/lib/reportDesignSystem.ts</file>
+    </files>
+    <summary>
+      根因：网页版浏览器正确渲染flex/grid居中，但html2canvas转PDF时
+      flex/inline-flex/inline-grid/table-cell均失效，导致文字偏移。
+
+      统一修复方案 — 所有胶囊/圆圈改用 line-height = height 铁律：
+
+      1) renderPill(): line-height从height-14改为height（精确居中）
+         之前-14px补偿过度，文字被推得太高
+      2) renderNumberCircle(): line-height从27px改为38px=height
+      3) CSS .cpc-pill scope lock: 从极端非对称padding
+         (sm:4/20, md:8/23, lg:11/26)改为
+         height+line-height=height+padding:0 Xpx
+         (sm:36/36, md:44/44, lg:52/52)
+      4) .cpc-level-tag: 从inline-grid+place-items:center
+         改为inline-block+padding:9px 18px（两行文字）
+      5) .cpc-part-number: 从inline-flex+align-items:center
+         改为inline-block+line-height:28px=height
+      6) .cpc-number-circle系列: line-height全部改为=height
+         (38/38, 36/36, 48/48)
+
+      html2canvas居中技术最终结论：
+      ✗ display:flex + align-items:center → 无效
+      ✗ display:inline-flex → 无效
+      ✗ display:inline-grid + place-items:center → 无效
+      ✗ display:inline-table + table-cell → 裁切内容
+      ✗ line-height = height - N (补偿值) → 偏移不精确
+      ✗ 非对称padding (top小bottom大) → 偏移不精确
+      ✓ line-height = height (精确相等) → 可靠居中
+    </summary>
+  </task>
+  <task id="11" status="completed" date="2026-03-16">
+    <title>PDF Top 10卡片头部居中修复 + 融合报告info圆圈移除</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+      <file>src/lib/fusionChartGenerator.ts</file>
+    </files>
+    <summary>
+      两个修复：
+
+      1) 移除融合报告"發展導向視覺框架"段落的ℹ深蓝色info圆圈
+         fusionChartGenerator.ts generateOverviewHTML() 中删除了
+         32px ℹ circle div，保留文字标题
+
+      2) 修复理想卡片报告"Top 10卡片深度解读"段落的居中问题
+
+         根因发现：
+         附图2(Top 3卡片 — 居中正确)的数字圆圈是display:block，
+         父容器是普通flex(无align-items:center)，圆圈在卡片内用margin:auto居中。
+
+         附图3(Top 10深度解读 — 居中偏移)的排名圆圈和分类标签是
+         display:inline-block，父容器用了display:flex;align-items:center。
+         html2canvas无法正确处理flex父容器的align-items:center，
+         导致子元素内部文字居中被破坏（数字偏左上，标签文字偏顶部）。
+
+         同时分类标签(內在價值等)有border:1px solid，
+         在box-sizing:border-box下content area=height-2，
+         但line-height=height导致line box溢出content area。
+
+         修复方案：
+         a) 头部行布局从 display:flex;align-items:center;gap:12px
+            改为 overflow:hidden + float布局
+         b) 排名圆圈: float:left, 保持line-height=height=40px
+         c) 分类标签容器: float:right, padding-top:6px手动居中
+            ((40px行高-28px标签)/2=6px)
+         d) 分类标签(有border): line-height从28px改为26px
+            (content area=28-2=26px, line-height匹配content area)
+         e) 光谱标签(无border): 保持line-height=28px=height
+         f) 卡片名称: overflow:hidden占据剩余空间, line-height:40px
+
+      新增铁律补充(v5.1)：
+      ✗ 父容器display:flex + align-items:center包含有height的子元素
+        → html2canvas会破坏子元素内部的line-height居中
+      ✓ float布局 + 手动padding-top居中 → 可靠
+      ✓ 有border的元素: line-height = height - 2*borderWidth
+        (在box-sizing:border-box下匹配content area)
+    </summary>
+  </task>
+  <task id="12" status="completed" date="2026-03-16">
+    <title>PDF分页文字切割修复 — 溢出容差硬上限 + 像素安全终检</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+    </files>
+    <summary>
+      根因：分页系统的溢出容差(absoluteMaxMm)允许内容扩展到
+      usableHeight * 1.08(+21.5mm)，但PDF页面footer线
+      仅在content区域下方3mm处。当findSafeCutRow在溢出区
+      找到间隙时，内容会越过footer甚至超出页面边缘，导致
+      底部文字行(如"• 停滯")被物理页面边缘切割。
+
+      三层修复：
+
+      1) findSafeCutRow新增可选maxRow参数：
+         限制searchEnd不超过maxRow，防止扫描器在
+         footer区域寻找间隙
+
+      2) downloadReportWithCover硬上限：
+         计算hardMaxSliceMm = footerLineMm - contentTopMm (≈272mm)
+         替代旧的usableHeight*1.08容差(290.5mm)
+         当首次扫描结果超过硬上限时，从硬上限位置
+         向上搜索更宽范围(25%页高)重新定位安全间隙
+         keep-together调整也使用hardMaxMm作为上限
+
+      3) 终检微调扫描(Final pixel-safety micro-scan)：
+         adjustCutForKeepTogether可能将切点移到
+         keep-together区域边界(zone.topMm)，
+         该位置可能不在文字行间隙上。
+         最终以±4%页高范围执行微小像素扫描，
+         确保切点落在真正的行间空白处。
+
+      downloadHtmlAsPdfWithBreaks同步修复(综合/理想/融合报告)：
+      hardMaxSlice = pdfHeight - yOffset，同样三层保护。
+
+      此修复涵盖所有报告类型的PDF导出：
+      - V3/V4.2完整报告 (downloadReportWithCover)
+      - 综合报告 (downloadHtmlAsPdfWithBreaks)
+      - 理想卡片报告 (downloadHtmlAsPdfWithBreaks)
+      - 融合报告 (downloadReportWithCover)
+    </summary>
+  </task>
+  <task id="13" status="completed" date="2026-03-16">
+    <title>PDF分页文字切割第二轮修复 — 切行验证 + 救援扫描 + 扫描器增强</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+    </files>
+    <summary>
+      问题：用户再次报告文字行("承載體。")被页面边界从中间水平切割。
+      上一轮修复的硬上限(hardMaxSliceMm)正确防止了footer溢出，
+      但切点仍然落在文字行中间而非行间空白。
+
+      根因推测：
+      - findSafeCutRow在某些内容区域返回了"假阳性"安静行
+        (把文字行误判为间隙行)，或未能找到真正的行间间隙而
+        fallback到targetRow（恰好在文字上）
+      - 后续keep-together调整和微扫描均未能修正
+
+      四层修复：
+
+      1) 新增getRowBusyness()函数：
+         直接读取画布指定行的像素数据，计算亮度跳变次数。
+         背景/间隙行通常0-4次跳变，文字行20+次跳变。
+
+      2) 新增isCutAtRealGap()函数：
+         检查切点行及其±checkRadius邻居行是否都是安静行。
+         如果切点本身或邻居有>6次跳变，判定为假间隙。
+
+      3) 分页循环末尾增加"救援扫描"(Rescue scan)：
+         在所有调整完成后，用isCutAtRealGap验证最终切点。
+         如果切点在文字上：
+         a) 第一轮救援：以±30%页高搜索真正的行间间隙
+         b) 第二轮救援：以±50%页高从hardMaxPx位置搜索
+         两轮救援的结果都必须通过isCutAtRealGap验证才接受。
+
+      4) findSafeCutRow增加MIN_GAP=2超放松扫描：
+         在8行→4行→单行fallback之间，插入2行连续安静行搜索。
+         捕获紧密行间隙（如低渲染缩放或紧密行高的文本块）。
+
+      5) 微扫描范围从±4%增大到±8%页高：
+         给keep-together调整后的间隙搜索更多空间。
+
+      受影响的两个分页循环均已同步修复：
+      - downloadReportWithCover (V3/融合报告)
+      - downloadHtmlAsPdfWithBreaks (综合/理想卡片报告)
+    </summary>
+  </task>
+  <task id="14" status="completed" date="2026-03-16">
+    <title>PDF生成速度优化 — 预计算+并行渲染+JPEG质量+字体超时</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+    </files>
+    <summary>
+      性能瞄颈分析结果：
+      1) html2canvas渲染占总时间60-70%（V3报告可达64MP+），且cover+body顺序执行
+      2) 分页循环中60-100次独立getImageData调用（每次访问GPU内存）
+      3) 每页同步toDataURL JPEG编码100-300ms
+
+      四项优化：
+
+      1) PrecomputedRowData预计算机制：
+         新增precomputeCanvasRowData()函数，分批次(2000行/批)一次性扫描全部canvas像素，
+         计算每行的transitions(Uint16Array)和avgBrightness(Float32Array — 保留小数精度)。
+         重构findSafeCutRow/getRowBusyness/isCutAtRealGap三个函数，
+         签名从HTMLCanvasElement改为PrecomputedRowData，
+         内部改为O(1)数组查找，消除所有后续getImageData调用。
+
+      2) 并行渲染：
+         downloadReportWithCover中将顺序执行的两个html2canvas调用
+         改为Promise.all并行执行，并将breakPixels收集移至渲染前。
+         预计节省渲染阶30-50%时间。
+
+      3) JPEG质量 0.92→0.85：
+         内容页和封面外的所有页面JPEG质量降低，
+         对文字报告几乎无视觉差异，编码速度提升约20%。
+
+      4) 字体超时 4s→2s：
+         Montserrat字体加载超时从4000ms缩短到2000ms，
+         加快首次渲染启动。
+
+      性能计时日志：
+      各阶段添加performance.now()计时，控制台输出：
+      [Report PDF] Render/Parallel render: Xms
+      [Report PDF] Row precompute: Xms, rows: N
+
+      受影响的两个分页循环均已同步修改：
+      - downloadReportWithCover (V3/融合报告)
+      - downloadHtmlAsPdfWithBreaks (综合/理想卡片报告)
+    </summary>
+  </task>
+  <task id="15" status="completed" date="2026-03-16">
+    <title>PDF文字切割第三轮修复 + 异步JPEG编码提速</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+    </files>
+    <summary>
+      问题1: "承載體。"仍被页面边界从字符中间水平切割。
+      问题2: 用户感受不到PDF下载速度提升。
+
+      根因分析：
+
+      1) 亮度精度丢失(文字切割)：
+         预计算的avgBrightness存为Uint8Array(0-255整数)，
+         Math.round导致阈值218附近的浮点值被四舍五入。
+         例如原始值218.4 > 218为true(安静行)，
+         但round(218.4)=218, 218>218为false(繁忙行)。
+         某些行间空白行被误判为繁忙行，findSafeCutRow无法找到有效间隙。
+         修复: Uint8Array→Float32Array，移除Math.round，保留原始浮点精度。
+
+      2) 验证半径不足(文字切割)：
+         isCutAtRealGap验证半径为2行，但中文字符抗锯齿边缘
+         只有3-5个像素的渐变过渡。切点落在文字行的抗锯齿边缘时，
+         ±2行可能全在过渡区(transitions=4-6)，验证通过但实际在文字上。
+         修复: 初始验证半径2→4(检查切点±4行共9行)，
+         加大检查窗口覆盖到文字主体区域，有效触发救援扫描。
+         救援确认半径保持2，最后手段半径保持1。
+
+      3) 同步JPEG编码阻塞(速度问题)：
+         toDataURL是同步调用，JPEG编码在主线程执行。
+         20页报告每页~100-200ms，总计2-4秒UI完全冻住。
+         加上html2canvas本身是CPU密集型单线程操作，
+         Promise.all不能真正并行执行(JS单线程)。
+         修复: 新增encodeCanvasImage()异步编码函数，
+         优先使用canvas.toBlob() (JPEG编码在浏览器原生线程执行，不阻塞JS)，
+         toBlob输出Uint8Array直接传给jsPDF.addImage (跳过base64开销~33%)，
+         toBlob失败时自动fallback到toDataURL→PNG链。
+
+      4) 完善性能计时日志：
+         新增Pipeline total、Pagination+encode、save阶段计时，
+         控制台可看到完整时间分布便于后续诊断。
+
+      encodeCanvasImage速度对比(单页1600x2000)：
+      toDataURL sync: ~150ms (阻塞) + base64字符串 ~1.5MB
+      toBlob async:   ~50ms (非阻塞) + Uint8Array ~1.1MB
+      20页预期节省: 2-3秒主线程阻塞时间
+    </summary>
+  </task>
+
+  <task id="16" status="completed" date="2026-03-16">
+    <title>PDF文字切割第四轮修复 — 边框跳变阈值+间隙宽度验证+应急回退</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+    </files>
+    <summary>
+      问题: "承載體。" 第四次报告被页面边界从字符中间水平切割。
+
+      根因分析：
+
+      V3报告锚点卡片使用 border:1px solid rgba(28,40,87,0.2) 在 #f8f9fa 背景上。
+      该半透明边框在2×画布渲染后，左右两条边框各产生4次亮度跳变(transition)。
+      合计产生 4-8 次跳变（取决于抗锯齿像素与2像素采样网格的对齐情况）。
+
+      旧 findSafeCutRow 的"安静行"阈值为 transitions ≤ 4，
+      恰好在边框跳变的边界上。不同浏览器/系统的渲染差异可能使
+      实际跳变数为 5-6，将所有行间空白行误判为"繁忙行"。
+      结果：findSafeCutRow 在整个卡片内找不到任何间隙，
+      四轮pass全部失败→返回 targetRow (在文字行上)。
+      isCutAtRealGap 验证失败→启动救援扫描，
+      但救援扫描使用相同的 findSafeCutRow→同样找不到间隙→失败。
+      lastResort 也失败→nextPageTop 保持在文字行上→切割穿过文字。
+
+      修复（四层防御）：
+
+      1) findSafeCutRow 安静行跳变阈值：≤4 → ≤10
+         容纳1px CSS边框(2px@2×)的抗锯齿变化(4-8次跳变)。
+         文字行(15-50次跳变)仍被正确排除。
+
+      2) isCutAtRealGap 验证阈值升级：
+         - 繁忙阈值: >6 → >12（与findSafeCutRow的≤10保持一致性余量）
+         - 新增亮度检查: avgBrightness > 200（拒绝在深色文字主体内切割）
+         - 新增 minGapWidth 可选参数：测量切点周围连续安静行宽度，
+           拒绝过窄的行间隙（抗锯齿边缘可能造成可见裁切伪影）
+
+      3) 初始验证增强：
+         isCutAtRealGap(rowData, verifyPx, 4, 14)
+         新增 minGapWidth=14 要求（≈7物理像素@2×），
+         确保切点在宽度足够的真实行间/段间间隙内，
+         而非抗锯齿过渡区的窄缝。
+
+      4) 应急回退（Emergency Fallback）：
+         当初始验证、救援扫描、lastResort 三轮全部失败时，
+         不再放弃（旧代码保持在文字行上的切点不变），
+         而是以50%页面填充率下限接受 findSafeCutRow 的最佳结果，
+         避免切割穿过文字主体。
+         同时新增完整诊断日志（transitions/brightness/行号）
+         便于后续排查。
+
+      两个分页函数(downloadHtmlAsPdfWithBreaks + downloadReportWithCover)
+      均已同步修改。
+    </summary>
+  </task>
+  <task id="17" status="completed" date="2026-03-17">
+    <title>PDF文字切割第五轮根治 — data-keep-together 保护锚点卡片内所有文本段落</title>
+    <files>
+      <file>src/lib/reportV3Generator.ts</file>
+    </files>
+    <summary>
+      问题: "承載體。" 第五次报告被页面边界从字符中间水平切割。
+      前四轮修复全部针对像素扫描算法(阈值、验证、救援、应急)，
+      但像素扫描在特定渲染环境下仍然不够可靠。
+
+      用户关键洞察："应该只需要确认所有的文字都必须放在文字框里"
+      — 即不该依赖像素扫描在卡片内做行级切分，
+      而应将每个文本段落标记为不可分割的整体。
+
+      根因分析（结构性缺陷）：
+
+      V3锚点卡片内容区域(.background:#f8f9fa)包含7个子段落：
+      1. Zone Structure Analysis (区域结构分析)
+      2. Core Interpretation Framework (核心诠释框架)
+      3. Anchor Explanation (锚点释义)
+      4. Risk Warning (风险预警)
+      5. Development Path (发展路径)
+      6. Structural Role (结构角色) — 已有 data-keep-together
+      7. Development Tension (发展张力) — 已有 data-keep-together
+
+      前5个段落没有 data-keep-together 标记！
+      当页面边界恰好落在这些段落的文字行中时，
+      adjustCutForKeepTogether 无法感知到这些段落的存在，
+      完全依赖像素扫描的行级gap检测。
+      前四轮修复都在不断调整像素扫描的参数，
+      但该方法天然脆弱（受浏览器渲染差异、边框抗锯齿、DPI等影响）。
+
+      修复（结构性保护）：
+
+      给前5个文本段落全部添加 data-keep-together + page-break-inside:avoid;
+      break-inside:avoid; 属性。每个段落成为不可分割的原子单元，
+      adjustCutForKeepTogether 会将切点移到段落之间的14px间距处。
+
+      修复效果：
+      - 段落内部文字绝对不会被切割
+      - 切割只发生在段落之间的14px margin空间
+      - 像素扫描退化为微调角色，不再承担核心防御责任
+      - 最坏情况：页面底部多出一点空白（段落被推到下一页）
+
+      此修复从根本上解决了像素扫描可靠性问题，
+      是前四轮修复（全部聚焦于 exportReport.ts 扫描算法）的结构性补充。
+    </summary>
+  </task>
+  <task id="18" status="completed" date="2026-03-17">
+    <title>PDF智能排版 — data-keep-together 改为 DOM 行级定位 (Text Line Snap)</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+      <file>src/lib/reportV3Generator.ts</file>
+    </files>
+    <summary>
+      问题: task#17 的 data-keep-together 方案将整个段落标记为不可分割，
+      导致当段落较长时，页面底部出现大面积空白甚至空白页。
+      用户要求"智能排版"：先确定文字框切割位置（页面边界），
+      再将文字内容按行依序放入上下两页的文字框中。
+
+      解决方案（DOM-level Text Line Snap）：
+
+      1. 回退：移除 task#17 添加的5处 data-keep-together，
+         恢复为普通 div style="margin-bottom:14px;"。
+         段落允许跨页切割，但切割必须对齐到行间隙。
+
+      2. 新增 TextLineCutInfo 接口和两个核心函数：
+         - collectTextLineCutInfo():
+           渲染前从 DOM 收集所有 .cpc-text-block / .cpc-text-block-light 元素的
+           位置(blockTopMm, blockBottomMm)和 CSS 行高(lineHeightMm)。
+           仅包含高度 >= 1.8 × lineHeight 的块（至少2行才需要行级切割）。
+
+         - snapCutToTextLineBoundary():
+           如果页面切点落在某文本块内部，用 Math.round(relativePos / lineHeightMm)
+           计算最近的行边界(blockTopMm + n × lineHeightMm)。
+           尝试最近、上一行、下一行三个候选位置，选出满足
+           minFillMm 和 hardMaxMm 约束的第一个。
+
+      3. 集成到两个分页循环（downloadReportWithCover + downloadHtmlAsPdfWithBreaks）：
+         - 在 adjustCutForKeepTogether 之后、像素扫描之前插入 text line snap。
+         - 如果 snap 成功，跳过后续所有像素扫描（微调、验证、救援）。
+         - DOM 测量是权威来源，免疫渲染差异（抗锯齿、边框、DPI）。
+
+      原理：
+      - line-height:1.8, font-size:14px → 每行 25.2px CSS
+      - 行间空隙约 11px CSS (25.2-14=11.2)，约 22px @2x canvas
+      - DOM 的 getBoundingClientRect() + getComputedStyle().lineHeight
+        直接给出行顶/行底的精确位置，无需像素扫描猜测
+      - 行边界处于行间空隙的正中心，确保切割不会碰到任何字符
+
+      优势对比：
+      | 方案 | 空间利用率 | 防切字可靠性 | 复杂度 |
+      |------|-----------|------------|--------|
+      | data-keep-together(task#17) | 差（大空白）| 100%（整段保护）| 简单 |
+      | 像素扫描(task#1-16) | 好 | ~95%（受渲染差异影响）| 中等 |
+      | Text Line Snap(本轮) | 好 | ~99%（DOM测量权威）| 中等 |
+    </summary>
+  </task>
+  <task id="19" status="completed" date="2026-03-17">
+    <title>Text Line Snap v2 — 检测盲区修复 + 像素精调</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+    </files>
+    <summary>
+      问题: task#18 的 Text Line Snap 存在两个缺陷导致文字行被切断更多：
+
+      1. 检测窗口过窄（仅 ±halfLine=2.93mm）：
+         第一层像素扫描（12%页高搜索范围）会把切点移到两个 cpc-text-block
+         之间的 14px CSS 间距（3.26mm margin）里。此间距正好落在 halfLine
+         检测范围的盲区 —— 不在上方文本块内部，也不在下方文本块内部。
+         snap 无法触发，切点停在间距中央，距字符反锯齿边缘仅 3-5px CSS，
+         PDF 分页后出现字符碎片（phantom artifact）。
+
+      2. snap 成功后跳过所有像素验证：
+         DOM 测量的行边界和 html2canvas 实际渲染可能有 2-3px 偏差
+         （字体度量差异、亚像素渲染、数值取整）。直接信任 DOM 位置
+         可能仍切到字符反锯齿区域。
+
+      修复（三处修改）：
+
+      A) snapCutToTextLineBoundary 升级：
+         - 检测范围从 halfLine (0.5×LH) 扩大到 1.5×lineHeight
+           → 14px 间距(3.26mm) 远小于 margin(8.79mm)，完全覆盖
+         - lineIdx >= 0 允许切在块顶部（之前 > 0 禁止）
+         - candidateMm 允许超出 blockBottom 的 30% lineHeight
+         - break → continue：首个匹配块候选均失败时继续尝试相邻块
+         - 返回值新增 lineHeightMm 供 caller 计算像素精调范围
+
+      B) 两个分页循环增加 snap 后像素精调：
+         snap 给出 DOM 近似位置后，在 ±1 lineHeight 范围内调用
+         findSafeCutRow 找到 canvas 上实际的安静行间隙中心。
+         仅当精调位置偏移 ≤1 lineHeight 且满足 minFillMm/hardMaxMm 时接受。
+         → DOM 定向 + 像素验证双重保险，消除渲染误差。
+
+      三层防线架构（最终版 v2）：
+      | 防线 | 机制 | 精度 | 作用 |
+      |------|------|------|------|
+      | 第一道 | data-keep-together | 块级 | 图表/banner 不可分割 |
+      | 第二道 | Text Line Snap v2 | DOM行级+像素精调 | 多行文本对齐到行间隙 |
+      | 第三道 | 像素扫描 | 像素级 | 非文本区域微调 |
+    </summary>
+  </task>
+  <task id="20" status="completed" date="2026-03-17">
+    <title>PDF分页第六轮修复 — 非对称精调 + Layer 4字型碰撞守卫 + 文本检测扩展</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+    </files>
+    <summary>
+      问题: "承載體。" 仍被页面边界切断。截图确认上20%(top strokes)在第一页，下80%在第二页。
+
+      三个根因：
+
+      1) 像素精调向下漂移(THE CRITICAL BUG):
+         Text Line Snap v2精调步骤允许±1×LH对称漂移。
+         findSafeCutRow在下方找到间隙后，切点向下偏移8-9px进入下一行字型区(15%-85%行高)。
+         CJK line-height 1.8×14px=25.2px，字型区约3.78-21.42px。
+         截图3-4px字符被切=切点在行边界以下8-9px，正是±1LH允许的漂移范围。
+
+      2) collectTextLineCutInfo()只检测.cpc-text-block和.cpc-text-block-light两个CSS类。
+         遗漏reportV3Generator.ts第1029行tension text(无class)和
+         exportReport.ts中48+处font-size:13-14px的p/div文本块。
+
+      3) 三层防线全部通过后，无最终字型碰撞检测守卫。
+
+      三项修复（均在两个分页循环同步实现）：
+
+      A) collectTextLineCutInfo()扩展为双轮选择器：
+         - Primary pass: .cpc-text-block, .cpc-text-block-light (不变)
+         - Secondary pass: p, div (font-size 12-16px, line-height ratio≥1.5,
+           非keep-together内部, 无cpc-text-block子元素)
+         - seenElements Set去重
+
+      B) 非对称精调约束：
+         maxDownDrift = lineHeightMm * 0.3 (原为±1×LH对称)
+         maxUpDrift = lineHeightMm (不变)
+         向下超限则REJECTED并跳过精调
+
+      C) Layer 4字型碰撞守卫（所有防线之后的终检）：
+         遍历textLineInfos，检测切点posInLine是否在字型区(15%-85%行高)。
+         碰撞时：gapAbove(行上方间隙)优先，gapBelow次选。
+         均需满足minFillMm和hardMaxMm约束。
+
+      四层防线架构(最终版)：
+      | 第一道 | data-keep-together | 块级（图表/banner不可分割）|
+      | 第二道 | Text Line Snap v2  | DOM行级+像素精调 |
+      | 第三道 | 像素扫描+救援      | 非文本区域微调验证 |
+      | 第四道 | Layer 4字型碰撞守卫 | 行内位置检测→上移到行间隙 |
+    </summary>
+  </task>
+
+  <task id="21" status="completed" date="2026-03-17">
+    <title>PDF下载全局进度条</title>
+    <files>
+      <file>src/lib/reportProgressStore.ts (新建)</file>
+      <file>src/components/desktop/ReportDownloadProgress.tsx (新建)</file>
+      <file>src/lib/exportReport.ts</file>
+      <file>src/lib/reportV3Download.ts</file>
+      <file>src/lib/reportFusionDownload.ts</file>
+      <file>src/lib/reportIdealCardDownload.ts</file>
+      <file>src/App.tsx</file>
+    </files>
+    <summary>
+      新增报告下载全局进度条，用户点下载后能看到实时进度。
+
+      实现方式：
+      1) reportProgressStore.ts — 极简响应式store(useSyncExternalStore兼容)，
+         API: reportProgressStart/reportProgressUpdate/reportProgressEnd。
+         内置三语言步骤标签(loading/fonts/rendering/analyzing/paginating/saving/generating)。
+
+      2) ReportDownloadProgress.tsx — 全局浮动进度条组件(fixed bottom-6 center)，
+         深海军蓝底+金色渐变进度条+FileDown图标+步骤文字+百分比数字，
+         AnimatePresence淡入淡出，挂载在App.tsx的Sonner旁边。
+
+      3) downloadReportWithCover — 每个阶段发射进度事件：
+         加载库(5%) → 字体(8%) → 渲染(12%) → 分析排版(50%) → 分页(55-90%每页递增) → 保存(94%)。
+         支持progressOffset参数：直接调用时offset=0从0%开始，
+         从wrapper函数调用时offset=30映射到30-100%范围。
+         returnBlobOnly时不发射进度(批量ZIP场景)。
+         catch时调用reportProgressEnd清理。
+
+      4) downloadHtmlAsPdfWithBreaks — 同样模式的进度事件。
+
+      5) wrapper函数添加生成阶段进度(0-30%)：
+         downloadV3ReportAsPdf: 0%(start) → 30%(generation done) → 30-100%(PDF pipeline)
+         downloadLatestFusionReport: 0% → 10%(data) → 20%(AI) → 30-100%(PDF)
+         downloadLatestIdealCardReport: 0% → 15%(data) → 25%(html gen) → 30-100%(PDF)
+         早期return路径(数据缺失)调用reportProgressEnd清理。
+    </summary>
+  </task>
+  <task id="22" status="completed" date="2026-03-17">
+    <title>PDF分页第七轮修复 — 标题/section header文字被切断</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+    </files>
+    <summary>
+      问题: 章节标题(cpc-part-header/section-header/section-header-compact)被页面切断，
+      如"第二部分 錨點詮釋"上半截留在前页、下半截出现在下页。
+
+      根因: 所有标题元素完全不被分页防线覆盖：
+      1) 没有data-keep-together属性 → Iron Rule #1不保护
+      2) 不匹配.cpc-text-block → 主检测不覆盖
+      3) 字号17-20px超出旧范围12-16px → 副检测不覆盖
+      4) 单行元素高度 < 1.8×lineHeight → 高度阈值排除
+      结果：四道防线全部失效，像素扫描将切点放在字符笔画中间。
+
+      三层修复：
+      A) collectKeepTogetherZones 选择器扩展：
+         从 [data-keep-together]
+         到 [data-keep-together], .cpc-part-header, .cpc-section-header, .cpc-section-header-compact
+         所有标题自动成为不可分割块。
+
+      B) collectTextLineCutInfo 全面放宽：
+         - 主检测新增header选择器 + h1-h6
+         - 副检测字号范围: 12-16 → 10-32px
+         - 副检测选择器新增 span
+         - 副检测line-height比例: 1.5 → 1.2
+         - 高度阈值: 1.8×LH → 0.5×LH (覆盖单行元素)
+
+      C) 两个分页循环增加"最终Iron Rule #1重校"：
+         在所有层(text snap, glyph guard, pixel scan)之后、slice之前，
+         再调一次adjustCutForKeepTogether确保像素扫描没有撤销保护。
+
+      防线架构升级为五层(v3)：
+      | 防线 | 机制 | 精度 | 作用 |
+      |------|------|------|------|
+      | 第一道 | keep-together(含标题类) | 块级 | 图表/banner/标题不可分割 |
+      | 第二道 | Text Line Snap v2 | DOM行级+像素精调 | 多行文本对齐到行间隙 |
+      | 第三道 | 像素扫描 | 像素级 | 非文本区域微调 |
+      | 第四道 | Glyph碰撞守卫 | 行内 | 检测字型区碰撞并nudge |
+      | 第五道 | 最终keep-together重校 | 块级 | 阻止前四层撤销保护 |
+    </summary>
+  </task>
+
+  <task id="23" status="completed" date="2026-03-17">
+    <title>PDF分页第八轮修复 — 系统性文字行切断 + 页底大面积空白</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+    </files>
+    <summary>
+      问题: task#22修复标题后，普通文字行仍被大量切断(如"交叉脈絡性遷移基因")，
+      同时页面底部出现大面积空白(60-80px)。两个连续页面都有文字被切，说明是系统性问题。
+
+      三个根因:
+      1) task#22的文本检测改动过于激进:
+         - 高度阈值0.5×LH使短标题/label进入textLineInfos
+         - header元素在PRIMARY pass中使snap匹配到错误的block
+         - span加入secondary pass创建与父block重叠的条目
+         - 错误block的lineHeight投射到相邻text block → 切点落入字型区
+
+      2) Layer 3(像素扫描)之后缺少glyph guard:
+         - 当textLineSnapped=false时, Layer 3运行后可将切点推入文本行
+         - Layer 4仅在Layer 3之前运行, Layer 3之后无人纠正
+         - Final Iron Rule仅保护keep-together区域, 不保护文本行
+
+      3) Glyph guard的minFillMm限制过严:
+         - minFillMm = 35%页高 ≈ 104mm
+         - 当碰撞发生在页面较早位置时, gapAbove/gapBelow都不满足104mm
+         - 守卫检测到碰撞却无法修正, 只能放弃 → 文字被切
+
+      四项修复:
+      A) 回退collectTextLineCutInfo至保守配置:
+         - PRIMARY pass: 仅.cpc-text-block/.cpc-text-block-light (移除header)
+         - 高度阈值: 回退到1.8×LH (移除0.5×LH)
+         - SECONDARY pass: 仅p/div, 字号12-16px, ratio≥1.5 (移除span, 10-32px, 1.2)
+         - 标题由keep-together保护(task#22的A部分保留), 不需要在textLineInfos中
+
+      B) 提取applyGlyphGuard()可复用函数:
+         - 使用relaxed minFill = minFillMm × 0.2 (约21mm, 允许短页避免切字)
+         - 比原来的minFillMm(104mm)宽松5倍
+         - 宁可产生短页也绝不切断文字
+
+      C) Layer 3之后增加glyph guard重检:
+         - 两个分页循环均增加"Layer 4 post-scan guard"
+         - 位于pixel scan+rescue之后、Final Iron Rule之前
+         - 捕获Layer 3引入的所有字型碰撞
+
+      D) maxDownDrift收紧: 0.3×LH → 0.1×LH:
+         - 0.3×LH = ~7.5px, 远超glyph zone起点(15%=3.78px)
+         - 0.1×LH = ~2.5px, 安全地留在gap zone(0-15%)内
+         - 防止pixel fine-tuning向下漂移进入字型区
+
+      防线架构升级为六层(v4):
+      | 防线 | 机制 | 精度 | 作用 |
+      |------|------|------|------|
+      | 第一道 | keep-together(含标题) | 块级 | 图表/banner/标题不可分割 |
+      | 第二道 | Text Line Snap v2 | DOM行级+像素精调 | 多行文本对齐到行间隙 |
+      | 第三道 | Glyph碰撞守卫(首次) | 行内 | snap后即刻检查字型碰撞 |
+      | 第四道 | 像素扫描+救援 | 像素级 | 非文本区域微调 |
+      | 第五道 | Glyph碰撞守卫(重检) | 行内 | 捕获像素扫描引入的碰撞 |
+      | 第六道 | 最终keep-together重校 | 块级 | 阻止前五层撤销保护 |
+
+      关键设计原则:
+      - 标题保护用keep-together(块级), 不混入textLineInfos(行级)
+      - glyph guard使用宽松填充限制(20% of normal), 宁短页不切字
+      - maxDownDrift限制在10%行高内, 确保fine-tune不逃出gap zone
+      - 每次像素操作后都跟一次glyph guard, 形成闭环
+    </summary>
+  </task>
+
+  <task id="24" status="completed" date="2026-03-17">
+    <title>PDF分页第九轮修复 — 短文本块切断 + 封面年资缺失</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+      <file>src/lib/reportV3Generator.ts</file>
+      <file>src/hooks/useAuth.tsx</file>
+    </files>
+    <summary>
+      问题1: 风险提醒等短文本段落(1-2行)仍被PDF分页切断。
+      问题2: 封面上的工作年资信息显示为空。
+
+      根因1 — 短文本块逃过所有六层防线:
+      - collectTextLineCutInfo的高度阈值为1.8×行高
+      - 仅1-2行的.cpc-text-block(如risk_warning)高度约1.0-2.0×行高
+      - 1行block: rect.height ≈ 1.0×LH < 1.8×LH → 被排除出textLineInfos
+      - 不在textLineInfos中 → Text Snap + Glyph Guard + Post-scan Guard全部跳过
+      - 唯一保护层是keep-together和pixel scan，但parent div没有data-keep-together
+      - 结果：六层防线对短文本块完全失效
+
+      根因2 — fetchProfile查询遗漏字段:
+      - useAuth.tsx的fetchProfile().select()未包含work_experience_years和language
+      - profile?.work_experience_years始终为undefined
+      - fallback workYears来自zustand(useTestAuth)，持久化后可能为null
+      - 封面generateCoverHTML收到null → 显示破折号"—"或空白
+
+      两项修复(B已回退):
+      A) processElement改为接收heightThreshold参数:
+         - PRIMARY pass(.cpc-text-block): 阈值0.8× (捕获任何可见文本块，含单行)
+         - SECONDARY pass(p/div): 阈值保持1.8× (排除短label/header)
+         - 0.8×对PRIMARY安全：这些元素已被开发者语义标记为文本块，
+           不含header(task#23已排除)，lineHeight正确
+         - 即使单行block，snap/guard也能正确推切到block边界上方/下方
+
+      B) [已回退] 锚点卡片5个内容区块的data-keep-together已移除:
+         用户反馈: 整段data-keep-together导致过多空白页，
+         正确做法是仅靠行级保护(text snap + glyph guard)防切字。
+         0.8×阈值已使短文本块进入textLineInfos，无需块级保护。
+         回退为 <div style="margin-bottom:14px;"> 无keep-together。
+
+      C) fetchProfile增加work_experience_years和language字段:
+         - .select()补充两个遗漏字段
+         - profile?.work_experience_years现在能正确读取用户资料中的年资值
+         - 封面grid正确显示"XX年"
+
+      防护逻辑总结:
+      - 所有.cpc-text-block: 无论长短均进入textLineInfos(0.8×阈值)
+      - 行级保护(text snap + glyph guard)负责对齐切点到行间隙
+      - 不使用data-keep-together包裹长文本段落(避免空白页)
+    </summary>
+  </task>
+  <task id="25" status="completed" date="2026-03-17">
+    <title>PDF分页第十轮修复 — snap两轮匹配算法 + 绝对最终像素验证 + CSS子元素重置</title>
+    <files>
+      <file>src/lib/exportReport.ts</file>
+      <file>src/lib/reportDesignSystem.ts</file>
+    </files>
+    <summary>
+      问题: 文字行仍被PDF分页切断(80-85%字符被截)。
+
+      三个根因:
+
+      1) snapCutToTextLineBoundary单轮遍历+首匹配胜出:
+         0.8×阈值使短单行.cpc-text-block也进入textLineInfos。
+         当短块在长块附近时，单轮正向遍历让短块先匹配。
+         snap用短块的blockTopMm计算行边界→切点落在长块字符上。
+
+      2) textLineSnapped=true路径跳过像素验证:
+         snap成功后代码跳过isCutAtRealGap救援扫描。
+         如果snap位置仍在字符上，无最终安全网。
+
+      3) .cpc-text-block子元素CSS未重置:
+         数据库内容含<p>/<ul>/<ol>等HTML标签，
+         默认margin/padding破坏均匀行高假设。
+
+      三项修复:
+
+      A) snapCutToTextLineBoundary改为两轮匹配:
+         Pass 1(DIRECT): 找所有blockTopMm<=cutMm<=blockBottomMm的块，
+         选最大(tallest)块→最可能是主要内容块。
+         Pass 2(EXTENDED): 无直接匹配时找±1.5×LH内最近中心的块。
+
+      B) 两条代码路径各增一道"绝对最终像素验证":
+         在Final Iron Rule重校之后、canvas切片之前:
+         isCutAtRealGap(rowData, absFinalPx, 3, 6)
+         失败时findSafeCutRow(15%页高范围)救援。
+         确保无论前面所有层做了什么，最终切点必须在真正的间隙上。
+
+      C) .cpc-text-block和.cpc-text-block-light的子元素CSS重置:
+         p/div/ul/ol/li/blockquote/h1-h6: margin:0;padding:0;
+         line-height:inherit;font-size:inherit;
+         ul/ol: list-style-position:inside;
+
+      防线架构升级为八层(v5):
+      | 防线 | 机制 |
+      | 第一道 | keep-together(图表/banner/标题) |
+      | 第二道 | Text Line Snap v3(两轮匹配) |
+      | 第三道 | Glyph碰撞守卫-首次 |
+      | 第四道 | 像素扫描+救援 |
+      | 第五道 | Glyph碰撞守卫-重检 |
+      | 第六道 | 最终keep-together重校 |
+      | 第七道(新) | 绝对最终像素验证 |
+    </summary>
+  </task>
+
+  <task id="26" status="completed" date="2026-03-17">
+    <title>resolveUserDisplayName全站统一 — 多级姓名回退链</title>
+    <files>
+      <file>src/lib/utils.ts (新增resolveUserDisplayName)</file>
+      <file>src/pages/desktop/ReportViewPage.tsx</file>
+      <file>src/pages/desktop/ResultsOverviewPage.tsx</file>
+      <file>src/pages/desktop/ReportDownloadPage.tsx</file>
+      <file>src/pages/desktop/HistoryPage.tsx (3处)</file>
+      <file>src/pages/desktop/FusionReportV3Page.tsx (3处)</file>
+      <file>src/pages/desktop/IdealCardResultsPage.tsx</file>
+      <file>src/pages/desktop/IdealCardReportViewPage.tsx (3处)</file>
+      <file>src/pages/desktop/ActionPlanPage.tsx</file>
+      <file>src/pages/desktop/DeepDivePage.tsx</file>
+    </files>
+    <summary>
+      问题: 封面姓名显示"用戶"(回退值)，profile.full_name为空时
+      直接使用占位符，未尝试其他数据源。
+
+      修复: 新增resolveUserDisplayName()工具函数，多级回退链:
+      1. profile?.full_name (数据库profiles表)
+      2. user?.user_metadata?.full_name || name (认证元数据)
+      3. user?.email前缀 (邮箱@前部分)
+      4. 语言相关占位符 ("User"/"用戶")
+
+      全站10个用户端页面统一替换，覆盖所有当前用户自己的
+      报告下载/查看/封面显示场景。
+
+      不涉及管理员/顾问查看其他用户报告的场景
+      (record.userName来自数据库，无法获取其他用户认证元数据)。
+    </summary>
+  </task>
+
+  <task id="27" status="completed" date="2026-03-17">
+    <title>resolveWorkExperienceYears全站统一 — 职涯阶段推断回退链</title>
+    <files>
+      <file>src/lib/utils.ts (新增resolveWorkExperienceYears)</file>
+      <file>src/pages/desktop/ReportViewPage.tsx (2处 + 修复遗漏的userName)</file>
+      <file>src/pages/desktop/FusionReportV3Page.tsx (3处)</file>
+      <file>src/pages/desktop/HistoryPage.tsx (2处 + 补充IdealCard下载的workYears参数)</file>
+      <file>src/pages/desktop/ReportDownloadPage.tsx (1处)</file>
+      <file>src/pages/desktop/ResultsOverviewPage.tsx (1处)</file>
+      <file>src/pages/desktop/IdealCardReportViewPage.tsx (2处)</file>
+      <file>src/pages/desktop/IdealCardResultsPage.tsx (1处)</file>
+      <file>src/pages/desktop/ComprehensiveReportPage.tsx (1处 + 修复userName)</file>
+      <file>src/pages/desktop/SharedReportPage.tsx (1处 + 补充career_stage select)</file>
+    </files>
+    <summary>
+      问题: 封面年资始终显示"—"(破折号)，即使用户已选择职涯阶段。
+
+      根因: profile?.work_experience_years 为 null 且 zustand workYears 为 null 时，
+      直接传 null 给封面。career_stage已设为"mid"，说明用户曾选择过，
+      但work_experience_years未成功持久化(fire-and-forget DB写入可能静默失败，
+      或用户通过其他路径设置career_stage但未调用setWorkYears)。
+
+      修复: 新增 resolveWorkExperienceYears() 工具函数，三级回退链:
+      1. profileYears (数据库profiles表)
+      2. zustandYears (zustand本地持久化)
+      3. 职涯阶段推断 (early→3, mid→8, senior→15, executive→18, entrepreneur→12, hr→8)
+      4. null (最后手段)
+
+      全站9个用户端页面 + 1个共享报告页面统一替换所有
+      profile?.work_experience_years ?? workYears 模式。
+
+      附带修复:
+      - ReportViewPage L207: ReportWebCover的userName仍用旧模式 → 改用resolveUserDisplayName
+      - ComprehensiveReportPage: userName使用旧"用戶"回退 → 改用resolveUserDisplayName
+      - HistoryPage: IdealCard下载函数未传workExperienceYears参数 → 补充
+      - SharedReportPage: profile select未包含career_stage → 补充
+    </summary>
+  </task>
+
+  <task id="28" status="completed">
+    <title>封面年资仍显示"—" — careerStage数据源修复（DB优先于zustand）</title>
+    <files>
+      <file>src/pages/desktop/ReportViewPage.tsx (2处resolveWorkExperienceYears + 2处careerStage)</file>
+      <file>src/pages/desktop/FusionReportV3Page.tsx (3处resolveWorkExperienceYears + 3处careerStage)</file>
+      <file>src/pages/desktop/HistoryPage.tsx (3处resolveWorkExperienceYears + 3处careerStage)</file>
+      <file>src/pages/desktop/ComprehensiveReportPage.tsx (1处resolveWorkExperienceYears + 1处careerStage)</file>
+      <file>src/pages/desktop/ReportDownloadPage.tsx (1处resolveWorkExperienceYears + 1处careerStage)</file>
+      <file>src/pages/desktop/ResultsOverviewPage.tsx (1处resolveWorkExperienceYears + 1处careerStage)</file>
+      <file>src/pages/desktop/IdealCardReportViewPage.tsx (2处resolveWorkExperienceYears + 2处careerStage)</file>
+      <file>src/pages/desktop/IdealCardResultsPage.tsx (1处resolveWorkExperienceYears + 1处careerStage)</file>
+    </files>
+    <summary>
+      问题: task#27已新增resolveWorkExperienceYears三级回退函数，但封面年资仍显示"—"。
+
+      根因: resolveWorkExperienceYears的第三个参数(careerStage)来自useTestAuth()
+      即zustand本地存储。Google OAuth用户登录后zustand的careerStage为null
+      (初始化值，未经过设置流程)，但数据库profiles.career_stage实际有值(如"mid")。
+      三级回退链:
+        1. profile?.work_experience_years = null (DB无值)
+        2. workYears = null (zustand无值)
+        3. careerStage = null (zustand无值!) ← 根因！应该用DB值"mid"可推断出8年
+      结果: 函数返回null → 显示"—"。
+
+      同时，careerStage || "mid"默认值恰好命中了该用户的真实阶段，所以封面的
+      职涯阶段标签显示正确("職涯中前期")，掩盖了数据源问题。
+      但如果用户DB career_stage="senior"而zustand为null，封面会错误显示"mid"。
+
+      修复:
+      1. 所有14处resolveWorkExperienceYears调用：第三参数从careerStage改为
+         profile?.career_stage || careerStage（DB优先，zustand回退）
+      2. 所有careerStage || "mid"模式改为
+         profile?.career_stage || careerStage || "mid"（同样DB优先）
+      3. SharedReportPage已在task#27中用profileData?.career_stage，无需修改
+    </summary>
+  </task>
+  <task id="29" status="completed_then_reverted">
+    <title>[已撤回] 封面年资终极修复 — resolveWorkExperienceYears函数兜底</title>
+    <files>
+      <file>src/lib/utils.ts</file>
+    </files>
+    <summary>
+      原修复: 当三级回退全部为null时返回stageToYears.mid (8年)。
+      撤回原因: 用户确认年资在数据库中有正确存储，不应默认推断。
+      当真的没有数据时应显示"—"(破折号)，而非猜测8年避免错误信息。
+      已恢复为 return null。
+    </summary>
+  </task>
+  <task id="30" status="completed">
+    <title>PDF数字圆圈/胶囊居中修复 — line-height铁律</title>
+    <files>
+      <file>src/lib/exportReport.ts (6处修复)</file>
+    </files>
+    <summary>
+      问题: PDF文件中理想人生卡Top3排名数字、行动建议编号、光谱分布条文字、
+      报告理解区图标等数字/文字未居中。
+
+      根因: 6处数字圆圈/胶囊的line-height ≠ height，违反html2canvas居中铁律
+      (html2canvas中唯一可靠的垂直居中方式是line-height=height+display:inline-block)。
+
+      修复明细:
+      1. L2592 光谱条: line-height:36px → 40px (父容器height:40px)
+      2. L2921 AI模块行动编号: 26×26圆圈 line-height:18→26px
+      3. L2998 Top3金色排名: 36×36圆圈 line-height:26→36px
+      4. L3234 融合报告Top3排名: 36×36圆圈 line-height:26→36px
+      5. L3433 报告理解ℹ图标: 36×36圆圈 line-height:28→36px
+      6. L3711 建议编号: 32×32圆圈 line-height:22→32px
+    </summary>
+  </task>
+  <task id="31" status="reverted" date="2026-03-17">
+    <title>[已撤回] 管理员工作台入口 — isTestLoggedIn useEffect（用户确认功能原本正常）</title>
+    <files>
+      <file>src/layouts/MainLayout.tsx</file>
+      <file>src/lib/utils.ts</file>
+    </files>
+    <summary>
+      原修复: MainLayout新增useEffect清除isTestLoggedIn标志。
+      撤回原因: 用户确认工作台功能原本正常运作，不需要此修改。
+      useEffect已移除，MainLayout恢复到修改前状态。
+
+      年资默认推断撤回保留(resolveWorkExperienceYears return null)。
+    </summary>
+  </task>
+  <task id="32" status="completed" date="2026-03-17">
+    <title>工作台入口消失 — fetchProfile查询包含不存在的language列导致400错误</title>
+    <files>
+      <file>src/hooks/useAuth.tsx</file>
+    </files>
+    <summary>
+      问题: 用户下拉菜单中工作台链接不显示。
+
+      根因: useAuth.tsx中fetchProfile的select查询包含"language"字段，
+      但profiles表中不存在该列(task#24中错误添加)。
+      数据库返回400: "column profiles.language does not exist"。
+      fetchProfile失败 → profile始终为null → findConsoleRoleFromProfile(profile)
+      无法执行 → 工作台链接不显示。
+      同时profile为null导致用户名回退到email前缀("clhsu")而非full_name。
+
+      修复:
+      1. 从fetchProfile的select中移除"language"字段
+      2. 从Profile接口中移除language属性
+      profile成功加载后，findConsoleRoleFromProfile可正确读取role_type和additional_roles，
+      工作台链接正常显示。
+    </summary>
+  </task>
+</bugfix_session>

@@ -63,12 +63,12 @@ export interface AnchorStatus {
 export interface AssessmentResult {
   scores: Record<string, number>;
   mainAnchor: string | null; // Highest-scoring anchor (internal/DB use)
-  highSensitivityAnchors: string[]; // All anchors with score > 80
+  coreAdvantageAnchors: string[]; // All anchors with score >= 80
   conflictAnchors: [string, string][];
   riskIndex: number;
   stability: "mature" | "developing" | "unclear";
   interpretation: Record<string, {
-    level: "nonNegotiable" | "highSensitive" | "conditional" | "nonCore";
+    level: "coreAdvantage" | "highSensitive" | "moderate" | "nonCore";
     label: string;
     score: number;
   }>;
@@ -78,13 +78,13 @@ export interface AssessmentResult {
   hasConflict?: boolean;
 }
 
-// High-sensitivity anchor threshold: strictly > 80
-export const HIGH_SENSITIVITY_THRESHOLD = 80;
+// Core advantage anchor threshold: score >= 80
+export const CORE_ADVANTAGE_THRESHOLD = 80;
 
-// Determine high-sensitivity anchors (score > 80, strictly greater than)
-export function getHighSensitivityAnchors(scores: Record<string, number>): string[] {
+// Determine core advantage anchors (score >= 80)
+export function getCoreAdvantageAnchors(scores: Record<string, number>): string[] {
   return Object.entries(scores)
-    .filter(([, score]) => score > HIGH_SENSITIVITY_THRESHOLD)
+    .filter(([, score]) => score >= CORE_ADVANTAGE_THRESHOLD)
     .sort(([, a], [, b]) => b - a)
     .map(([dim]) => dim);
 }
@@ -704,30 +704,30 @@ export function useAssessment() {
 
     // Score interpretation using STANDARDIZED scores (0-100 scale)
     const interpretation: Record<string, {
-      level: "nonNegotiable" | "highSensitive" | "conditional" | "nonCore";
+      level: "coreAdvantage" | "highSensitive" | "moderate" | "nonCore";
       label: string;
       score: number;
     }> = {};
 
     Object.entries(displayScores).forEach(([dim, score]) => {
-      let level: "nonNegotiable" | "highSensitive" | "conditional" | "nonCore";
+      let level: "coreAdvantage" | "highSensitive" | "moderate" | "nonCore";
       let label: string;
 
-      const getLabelForLevel = (levelData: typeof SCORE_INTERPRETATION.nonNegotiable) => {
+      const getLabelForLevel = (levelData: typeof SCORE_INTERPRETATION.coreAdvantage) => {
         if (language === "en") return levelData.labelEn;
         if (language === "zh-TW") return levelData.labelZhTW;
         return levelData.labelZh;
       };
 
-      if (score >= SCORE_INTERPRETATION.nonNegotiable.min) {
-        level = "nonNegotiable";
-        label = getLabelForLevel(SCORE_INTERPRETATION.nonNegotiable);
+      if (score >= SCORE_INTERPRETATION.coreAdvantage.min) {
+        level = "coreAdvantage";
+        label = getLabelForLevel(SCORE_INTERPRETATION.coreAdvantage);
       } else if (score >= SCORE_INTERPRETATION.highSensitive.min) {
         level = "highSensitive";
         label = getLabelForLevel(SCORE_INTERPRETATION.highSensitive);
-      } else if (score >= SCORE_INTERPRETATION.conditional.min) {
-        level = "conditional";
-        label = getLabelForLevel(SCORE_INTERPRETATION.conditional);
+      } else if (score >= SCORE_INTERPRETATION.moderate.min) {
+        level = "moderate";
+        label = getLabelForLevel(SCORE_INTERPRETATION.moderate);
       } else {
         level = "nonCore";
         label = getLabelForLevel(SCORE_INTERPRETATION.nonCore);
@@ -763,13 +763,13 @@ export function useAssessment() {
       .map(answer => answer.questionId)
       .slice(0, 5);
 
-    // Determine high-sensitivity anchors (> 80) using standardized scores
-    const highSensitivityAnchors = getHighSensitivityAnchors(displayScores);
+    // Determine core advantage anchors (>= 80) using standardized scores
+    const coreAdvantageAnchors = getCoreAdvantageAnchors(displayScores);
 
     return {
       scores: displayScores,
       mainAnchor: primaryAnchor,
-      highSensitivityAnchors,
+      coreAdvantageAnchors,
       conflictAnchors: conflictPairs,
       riskIndex,
       stability: stabilityLevel,
@@ -799,10 +799,11 @@ export function useAssessment() {
   }, [phase, language]);
 
   // Restore progress from saved state
-  // Rebuilds the question queue up to the current point
+  // Rebuilds the question queue using the saved order to maintain consistency
   const restoreProgress = useCallback((
     savedAnswers: Answer[],
-    savedIndex: number
+    savedIndex: number,
+    savedQuestionOrder?: string[]
   ) => {
     setAnswers(savedAnswers);
     setCurrentIndex(savedIndex);
@@ -825,11 +826,37 @@ export function useAssessment() {
     });
     setAnchorStatuses(newStatuses);
 
-    // Full mode: rebuild all 40 questions in same order
-    const count = savedAnswers.length;
+    // Rebuild question queue in the ORIGINAL saved order (not default order)
     const allQuestions = QUESTIONS_DATA.filter(q => q.status === "active");
-    setQuestionQueue(allQuestions.map(q => buildLocalizedQuestion(q, language)));
-    setPhase(count >= 40 ? "complete" : "coverage");
+    const questionById = new Map(allQuestions.map(q => [q.id, q]));
+
+    if (savedQuestionOrder && savedQuestionOrder.length > 0) {
+      // Restore exact original question order from saved progress
+      const orderedQuestions: Question[] = [];
+      for (const questionId of savedQuestionOrder) {
+        const questionData = questionById.get(questionId);
+        if (questionData) {
+          orderedQuestions.push(buildLocalizedQuestion(questionData, language));
+        }
+      }
+      // If saved order is valid (has all questions), use it;
+      // otherwise fall back to default order
+      if (orderedQuestions.length >= allQuestions.length) {
+        setQuestionQueue(orderedQuestions);
+      } else {
+        setQuestionQueue(allQuestions.map(q => buildLocalizedQuestion(q, language)));
+      }
+    } else {
+      setQuestionQueue(allQuestions.map(q => buildLocalizedQuestion(q, language)));
+    }
+
+    const count = savedAnswers.length;
+    if (count >= 40) {
+      setPhase("complete");
+      setIsComplete(true);
+    } else {
+      setPhase("coverage");
+    }
   }, [language]);
 
   const getQuestionOrder = useCallback(() => {

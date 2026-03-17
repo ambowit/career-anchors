@@ -29,6 +29,7 @@ const ALL_ROLES: RoleType[] = [
   "consultant",
   "client",
   "individual",
+  "collaborator",
   "partner",
 ];
 
@@ -66,7 +67,8 @@ const ROLE_BADGE_COLORS: Record<string, string> = {
   consultant: "bg-emerald-100 text-emerald-700 border-emerald-200",
   client: "bg-teal-100 text-teal-700 border-teal-200",
   individual: "bg-gray-100 text-gray-600 border-gray-200",
-  partner: "bg-orange-100 text-orange-700 border-orange-200",
+  collaborator: "bg-cyan-100 text-cyan-700 border-cyan-200",
+  partner: "bg-amber-100 text-amber-700 border-amber-200",
 };
 
 interface RoleOverride {
@@ -182,7 +184,7 @@ export default function SuperAdminRolesPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
         {categories.map((category) => {
           const rolesInCategory = ALL_ROLES.filter((role) => getRoleCategory(role) === category);
           const totalUsers = rolesInCategory.reduce((sum, role) => sum + (userCountByRole[role] || 0), 0);

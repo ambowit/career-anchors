@@ -213,7 +213,7 @@ function deriveStageKey(workYears: number | null, isExecutive: boolean, isEntrep
 interface AssessmentResult {
   scores: Record<string, number>;
   mainAnchor: string;
-  highSensitivityAnchors?: string[];
+  coreAdvantageAnchors?: string[];
   conflictAnchors: string[][];
   stability: string;
   interpretation?: Record<string, { level: string; label: string; score: number }>;
@@ -233,17 +233,24 @@ serve(async (req) => {
       workYears = null,
       isExecutive = false,
       isEntrepreneur = false,
+      reportVersion = null,
+      organizationId = null,
     } = await req.json() as {
       result: AssessmentResult;
-      analysisType: "deep_dive" | "career_path" | "action_plan";
+      analysisType: "deep_dive" | "career_path" | "action_plan" | "dual_anchor" | "tri_anchor";
       language?: "zh-CN" | "zh-TW" | "en";
       workExpDescription?: string;
       workYears?: number | null;
       isExecutive?: boolean;
       isEntrepreneur?: boolean;
+      reportVersion?: string | null;
+      organizationId?: string | null;
     };
 
-    logStep("Received request", { analysisType, mainAnchor: result.mainAnchor, highSensAnchors: result.highSensitivityAnchors, language, workYears, isExecutive, isEntrepreneur });
+    // Detect enterprise version
+    const isEnterprise = !!reportVersion && reportVersion !== "standard";
+
+    logStep("Received request", { analysisType, mainAnchor: result.mainAnchor, coreAdvAnchors: result.coreAdvantageAnchors, language, workYears, isExecutive, isEntrepreneur, reportVersion, isEnterprise });
 
     const apiKey = Deno.env.get("SUPERUN_API_KEY");
     if (!apiKey) {
@@ -255,8 +262,8 @@ serve(async (req) => {
     const conflictExplanations = CONFLICT_EXPLANATIONS[language] || CONFLICT_EXPLANATIONS["zh-CN"];
 
     // Compute high-sensitivity anchors (score > 80)
-    const highSensAnchors = result.highSensitivityAnchors || Object.entries(result.scores)
-      .filter(([, score]) => score > 80)
+    const highSensAnchors = result.coreAdvantageAnchors || Object.entries(result.scores)
+      .filter(([, score]) => score >= 80)
       .sort(([, a], [, b]) => b - a)
       .map(([dim]) => dim);
     const displayAnchor = highSensAnchors[0] || result.mainAnchor;
@@ -276,17 +283,17 @@ serve(async (req) => {
     const getScoreInterpretation = (score: number, lang: string) => {
       if (lang === "en") {
         if (score >= 80) return "very hard to compromise long-term";
-        if (score >= 65) return "can tolerate short-term, but needs attention long-term";
+        if (score >= 65) return "high-sensitivity anchor, sustainable development";
         if (score >= 45) return "matters to you, but not a bottom line";
         return "not your main decision factor";
       } else if (lang === "zh-TW") {
         if (score >= 80) return "很難長期妥協";
-        if (score >= 65) return "短期可以忍，但長期需要被關注";
+        if (score >= 65) return "高敏感錨點，可持續發展";
         if (score >= 45) return "有意義，但不是底線";
         return "不是做選擇時最在意的點";
       }
       if (score >= 80) return "很难长期妥协";
-      if (score >= 65) return "短期可以忍，但长期需要被关注";
+      if (score >= 65) return "高敏感锚点，可持续发展";
       if (score >= 45) return "有意义，但不是底线";
       return "不是做选择时最在意的点";
     };
@@ -313,19 +320,19 @@ serve(async (req) => {
     let riskAmplificationNote = "";
     if (stageKey === "senior" && isHighSensitivity) {
       if (language === "en") {
-        riskAmplificationNote = "IMPORTANT: This user is in the Senior-Career Stage with a high-sensitivity anchor (score >80). Misalignment at this stage is particularly critical and does not manifest as exploration, but as fatigue and identity friction. You MUST include Burnout Signal Pattern, Early Warning Signs, and Derailment Pattern in the risk section.";
+        riskAmplificationNote = "IMPORTANT: This user is in the Senior-Career Stage with a core anchor (score >80). Misalignment at this stage is particularly critical and does not manifest as exploration, but as fatigue and identity friction. You MUST include Burnout Signal Pattern, Early Warning Signs, and Derailment Pattern in the risk section.";
       } else if (language === "zh-TW") {
-        riskAmplificationNote = "重要：你處於職業資深期，高敏感錨強度高。在這一階段，錯配風險尤為嚴重，不會以探索表現，而會以疲勞與身份摩擦表現。你必須在風險部分加入：倦怠信號模式、早期預警信號、偏離模式。";
+        riskAmplificationNote = "重要：你處於職業資深期，核心錨強度高。在這一階段，錯配風險尤為嚴重，不會以探索表現，而會以疲勞與身份摩擦表現。你必須在風險部分加入：倦怠信號模式、早期預警信號、偏離模式。";
       } else {
-        riskAmplificationNote = "重要：此用户处于职业资深期，高敏感锚强度高。在这一阶段，错配风险尤为严重，不会以探索表现，而会以疲劳与身份摩擦表现。你必须在风险部分加入：倦怠信号模式、早期预警信号、偏离模式。";
+        riskAmplificationNote = "重要：此用户处于职业资深期，核心锚强度高。在这一阶段，错配风险尤为严重，不会以探索表现，而会以疲劳与身份摩擦表现。你必须在风险部分加入：倦怠信号模式、早期预警信号、偏离模式。";
       }
     } else if (stageKey === "executive" && isHighSensitivity) {
       if (language === "en") {
-        riskAmplificationNote = "IMPORTANT: This user is in the Executive/Entrepreneur Stage with a high-sensitivity anchor (score >80). This anchor has become part of their identity architecture. Long-term misalignment will affect judgment patterns and organizational culture direction. You MUST analyze: decision-making style, power usage patterns, risk preferences, control modes, and shadow side.";
+        riskAmplificationNote = "IMPORTANT: This user is in the Executive/Entrepreneur Stage with a core anchor (score >80). This anchor has become part of their identity architecture. Long-term misalignment will affect judgment patterns and organizational culture direction. You MUST analyze: decision-making style, power usage patterns, risk preferences, control modes, and shadow side.";
       } else if (language === "zh-TW") {
-        riskAmplificationNote = "重要：你處於高管/創業者階段，高敏感錨強度高。此錨點已成為身份架構的一部分，長期錯配將影響判斷方式與組織文化方向。你必須分析：決策風格、權力使用方式、風險偏好、控制模式、陰影面。";
+        riskAmplificationNote = "重要：你處於高管/創業者階段，核心錨強度高。此錨點已成為身份架構的一部分，長期錯配將影響判斷方式與組織文化方向。你必須分析：決策風格、權力使用方式、風險偏好、控制模式、陰影面。";
       } else {
-        riskAmplificationNote = "重要：此用户处于高管/创业者阶段，高敏感锚强度高。此锚点已成为身份架构的一部分，长期错配将影响判断方式与组织文化方向。你必须分析：决策风格、权力使用方式、风险偏好、控制模式、阴影面。";
+        riskAmplificationNote = "重要：此用户处于高管/创业者阶段，核心锚强度高。此锚点已成为身份架构的一部分，长期错配将影响判断方式与组织文化方向。你必须分析：决策风格、权力使用方式、风险偏好、控制模式、阴影面。";
       }
     }
 
@@ -434,6 +441,38 @@ serve(async (req) => {
 
     const stageInstructions = getStageInstructions(stageKey, language);
 
+    // Enterprise version content rules — injected into system prompt when applicable
+    const getEnterpriseRules = (lang: string): string => {
+      if (!isEnterprise) return "";
+      if (lang === "en") {
+        return `\nENTERPRISE VERSION CONTENT RULES (MANDATORY):
+- Do NOT use the terms "side business", "side hustle", "moonlighting", or "副業/副业" in any language
+- Replace with: "cross-departmental projects", "internal innovation pilots", "cross-functional initiatives"
+- Do NOT use standalone negative risk labels (e.g., "High Risk", "Danger Zone")
+- Instead use development-oriented framing: "development considerations", "areas for attention", "growth focus points"
+- Frame all challenges as organizational growth opportunities, not personal deficiencies
+- Maintain a constructive, professional tone suitable for corporate talent development contexts`;
+      } else if (lang === "zh-TW") {
+        return `\n企業版內容規範（強制執行）：
+- 嚴格禁止使用「副業」「兼職創業」「副業專案」等詞彙
+- 替代用詞：「跨部門專案」「內部創新試點」「跨職能協作」
+- 嚴格禁止使用獨立的負面風險標籤（如「高風險」「危險區域」）
+- 替代框架：「發展注意事項」「關注領域」「成長重點」
+- 所有挑戰應框架為組織成長機會，而非個人缺陷
+- 用詞須符合台灣企業人才發展語境：使用「實習生」非「管培生」；使用「專案」非「项目」；使用「主管」非「领导」
+- 保持建設性、專業的語調`;
+      }
+      return `\n企业版内容规范（强制执行）：
+- 严格禁止使用「副业」「兼职创业」「副业项目」等词汇
+- 替代用词：「跨部门专案」「内部创新试点」「跨职能协作」
+- 严格禁止使用独立的负面风险标签（如「高风险」「危险区域」）
+- 替代框架：「发展注意事项」「关注领域」「成长重点」
+- 所有挑战应框架为组织成长机会，而非个人缺陷
+- 保持建设性、专业的语调，适合企业人才发展语境`;
+    };
+
+    const enterpriseRules = getEnterpriseRules(language);
+
     if (analysisType === "deep_dive") {
       // SCPC Developmental Career Architecture Analysis — 6-section report
       const prohibitions = isEnglish
@@ -468,11 +507,12 @@ serve(async (req) => {
 This is NOT a generic career test report. It is a stage-differentiated developmental architecture analysis.
 
 OUTPUT STYLE:
-- Write in a warm, CONVERSATIONAL tone — like a thoughtful career coach talking directly to the person, not an academic report
-- Use everyday language that a non-psychologist would easily understand
+- Write in a PROFESSIONAL, analytical report tone — like a structured career assessment report written by a senior career development expert
+- Use clear, precise language that is authoritative yet accessible to non-psychologists
 - Development-oriented, not labeling
-- No motivational fluff, but also no cold academic jargon
-- No clichés or generic advice
+- No motivational fluff, no clichés, no generic advice
+- NEVER start with greetings like "Hi", "Hello", or casual openings — begin directly with the analytical content
+- Maintain formal report structure throughout
 
 VOICE — MANDATORY:
 - ALWAYS write in SECOND PERSON: use "you", "your", "yours" throughout
@@ -493,7 +533,7 @@ ${stageInstructions}
 
 ${riskAmplificationNote}
 
-${prohibitions}`
+${prohibitions}${enterpriseRules}`
         : isTW
         ? `你正在產出一份 Developmental Career Architecture Analysis（發展性職業架構分析），基於 SCPC 職業錨評測結果。
 
@@ -504,10 +544,12 @@ ${prohibitions}`
 常見易錯：本質（非本质）、顯示（非显示）、價值（非价值）、發展（非发展）、認識（非认识）、環境（非环境）、結構（非结构）、長期（非长期）、實現（非实现）、決策（非决策）、處理（非处理）、組織（非组织）、運營（非运营）、變化（非变化）、對於（非对于）、問題（非问题）、經驗（非经验）、關係（非关系）、設計（非设计）、進行（非进行）。
 
 輸出風格：
-- 用溫暖的對話語氣書寫——像一位貼心的職涯教練在直接跟當事人說話，而不是寫學術報告
-- 使用日常用語，讓非心理學專業的人也能輕鬆理解
+- 用專業、分析性的語氣書寫——像一份由資深職涯發展專家撰寫的結構化職業評估報告
+- 使用清晰、精確的語言，保持權威性但讓非專業讀者也能理解
 - 發展導向，不標籤化
-- 不雞湯，但也不要冷冰冰的學術用語
+- 不雞湯，不空洞，不使用口語化表達
+- 嚴格禁止以「嗨」「你好」「Hi」等問候語開頭——直接從分析內容開始
+- 全程保持正式報告結構
 
 人稱要求——最高優先級：
 - 全程使用第二人稱：「你」、「你的」
@@ -528,16 +570,18 @@ ${stageInstructions}
 
 ${riskAmplificationNote}
 
-${prohibitions}`
+${prohibitions}${enterpriseRules}`
         : `你正在产出一份 Developmental Career Architecture Analysis（发展性职业架构分析），基于 SCPC 职业锚评测结果。
 
 这不是普通的职业测评报告，而是阶段化的发展性职业架构分析。
 
 输出风格：
-- 用温暖的对话语气书写——像一位贴心的职涯教练在直接跟当事人说话，而不是写学术报告
-- 使用日常用语，让非心理学专业的人也能轻松理解
+- 用专业、分析性的语气书写——像一份由资深职涯发展专家撰写的结构化职业评估报告
+- 使用清晰、精确的语言，保持权威性但让非专业读者也能理解
 - 发展导向，不标签化
-- 不鸡汤，但也不要冷冰冰的学术用语
+- 不鸡汤，不空洞，不使用口语化表达
+- 严格禁止以「嗨」「你好」「Hi」等问候语开头——直接从分析内容开始
+- 全程保持正式报告结构
 
 人称要求——最高优先级：
 - 全程使用第二人称：「你」、「你的」
@@ -558,7 +602,7 @@ ${stageInstructions}
 
 ${riskAmplificationNote}
 
-${prohibitions}`;
+${prohibitions}${enterpriseRules}`;
 
       const userProfileBlock = isEnglish
         ? `User Profile: ${workExpDescription || "Not specified"}
@@ -566,7 +610,7 @@ Career Stage: ${stageLabel}
 Stage Definition: ${stageDefinition}
 
 Assessment Results:
-- High-Sensitivity Anchor: ${mainAnchorName} (${mainScore} points) — ${mainAnchorMeaning}
+- Core Anchor: ${mainAnchorName} (${mainScore} points) — ${mainAnchorMeaning}
 - Conflict Anchors: ${conflictInfo.length > 0 ? conflictInfo.map(conflictItem => `${conflictItem.pair} — ${conflictItem.explanation}`).join("; ") : "None"}
 - Stability: ${result.stability === "mature" ? "Mature & Stable" : result.stability === "developing" ? "Developing" : "Still Unclear"}
 - All dimension scores: ${scoresWithInterpretation.map(scoreItem => `${scoreItem.name}: ${scoreItem.score} (${scoreItem.interpretation})`).join(", ")}`
@@ -576,7 +620,7 @@ Assessment Results:
 階段定義：${stageDefinition}
 
 評測結果：
-- 高敏感錨：${mainAnchorName}（${mainScore}分）— ${mainAnchorMeaning}
+- 核心錨：${mainAnchorName}（${mainScore}分）— ${mainAnchorMeaning}
 - 衝突錨：${conflictInfo.length > 0 ? conflictInfo.map(conflictItem => `${conflictItem.pair} — ${conflictItem.explanation}`).join("；") : "無"}
 - 穩定度：${result.stability === "mature" ? "成熟穩定" : result.stability === "developing" ? "發展中" : "尚不清晰"}
 - 各維度得分：${scoresWithInterpretation.map(scoreItem => `${scoreItem.name}: ${scoreItem.score}分（${scoreItem.interpretation}）`).join("，")}`
@@ -585,7 +629,7 @@ Assessment Results:
 阶段定义：${stageDefinition}
 
 评测结果：
-- 高敏感锚：${mainAnchorName}（${mainScore}分）— ${mainAnchorMeaning}
+- 核心锚：${mainAnchorName}（${mainScore}分）— ${mainAnchorMeaning}
 - 冲突锚：${conflictInfo.length > 0 ? conflictInfo.map(conflictItem => `${conflictItem.pair} — ${conflictItem.explanation}`).join("；") : "无"}
 - 稳定度：${result.stability === "mature" ? "成熟稳定" : result.stability === "developing" ? "发展中" : "尚不清晰"}
 - 各维度得分：${scoresWithInterpretation.map(scoreItem => `${scoreItem.name}: ${scoreItem.score}分（${scoreItem.interpretation}）`).join("，")}`;
@@ -604,7 +648,7 @@ Output in JSON format:
     "stageImplication": "2-3 sentences: What this stage means for interpreting your career anchor results specifically. How should we read your scores differently because of this stage?"
   },
   "primaryAnchorInterpretation": {
-    "coreMeaning": "Stage-specific interpretation of the high-sensitivity anchor. NOT a generic definition. How does '${mainAnchorMeaning}' manifest specifically at the ${stageLabel} stage? Write in second person (you/your).",
+    "coreMeaning": "Stage-specific interpretation of the core anchor. NOT a generic definition. How does '${mainAnchorMeaning}' manifest specifically at the ${stageLabel} stage? Write in second person (you/your).",
     "stageContext": "What this anchor means at YOUR current career stage — the behavioral implications, decision patterns, and identity expression that are unique to this stage. Address the reader directly.",
     "ifAligned": "If your current role/environment supports this anchor at this stage, you will experience... (stage-appropriate positive description)",
     "ifMisaligned": "If your current role/environment conflicts with this anchor at this stage, you will experience... (stage-appropriate negative description)"
@@ -663,7 +707,7 @@ CRITICAL: Every section must be stage-differentiated. The same anchor at the Ear
     "stageImplication": "2-3句：這個階段對於解讀你的職業錨結果意味著什麼。因為你處於這個階段，應該如何不同地解讀你的分數？"
   },
   "primaryAnchorInterpretation": {
-    "coreMeaning": "高敏感錨的階段化解釋。不是通用定義。'${mainAnchorMeaning}'在${stageLabel}具體如何呈現？用第二人稱（你）書寫。",
+    "coreMeaning": "核心錨的階段化解釋。不是通用定義。'${mainAnchorMeaning}'在${stageLabel}具體如何呈現？用第二人稱（你）書寫。",
     "stageContext": "這個錨點在你目前的職業階段意味著什麼——行為影響、決策模式和身份表達。直接對讀者說話。",
     "ifAligned": "如果你目前的角色/環境支持這個錨點，在此階段，你會體驗到……",
     "ifMisaligned": "如果你目前的角色/環境與這個錨點衝突，在此階段，你會體驗到……"
@@ -721,7 +765,7 @@ CRITICAL: Every section must be stage-differentiated. The same anchor at the Ear
     "stageImplication": "2-3句：这个阶段对于解读你的职业锚结果意味着什么。因为你处于这个阶段，应该如何不同地解读你的分数？"
   },
   "primaryAnchorInterpretation": {
-    "coreMeaning": "高敏感锚的阶段化解释。不是通用定义。'${mainAnchorMeaning}'在${stageLabel}具体如何呈现？用第二人称（你）书写。",
+    "coreMeaning": "核心锚的阶段化解释。不是通用定义。'${mainAnchorMeaning}'在${stageLabel}具体如何呈现？用第二人称（你）书写。",
     "stageContext": "这个锚点在你目前的职业阶段意味着什么——行为影响、决策模式和身份表达。直接对读者说话。",
     "ifAligned": "如果你目前的角色/环境支持这个锚点，在此阶段，你会体验到……",
     "ifMisaligned": "如果你目前的角色/环境与这个锚点冲突，在此阶段，你会体验到……"
@@ -779,7 +823,7 @@ RULES:
 - All advice MUST be differentiated by career stage
 
 ${stageInstructions}
-${riskAmplificationNote}`
+${riskAmplificationNote}${enterpriseRules}`
         : isTW
         ? `你幫助使用者基於職業錨約束創建階段化的職業行動計劃。
 
@@ -795,7 +839,7 @@ ${riskAmplificationNote}`
 - 所有建議必須按職業階段差異化
 
 ${stageInstructions}
-${riskAmplificationNote}`
+${riskAmplificationNote}${enterpriseRules}`
         : `你帮助用户基于职业锚约束创建阶段化的职业行动计划。
 
 规则：
@@ -806,7 +850,7 @@ ${riskAmplificationNote}`
 - 所有建议必须按职业阶段差异化
 
 ${stageInstructions}
-${riskAmplificationNote}`;
+${riskAmplificationNote}${enterpriseRules}`;
 
       const actionPlanProfile = isEnglish
         ? `User profile: ${workExpDescription || "Not specified"}
@@ -814,7 +858,7 @@ Career Stage: ${stageLabel}
 Stage Definition: ${stageDefinition}
 
 Assessment Results:
-- High-Sensitivity Anchor: ${mainAnchorName} (${mainScore} points) — ${mainAnchorMeaning}
+- Core Anchor: ${mainAnchorName} (${mainScore} points) — ${mainAnchorMeaning}
 - Conflict Anchors: ${conflictInfo.length > 0 ? conflictInfo.map(conflictItem => conflictItem.pair).join(", ") : "None"}
 - All scores: ${scoresWithInterpretation.map(scoreItem => `${scoreItem.name}: ${scoreItem.score}`).join(", ")}`
         : isTW
@@ -823,7 +867,7 @@ Assessment Results:
 階段定義：${stageDefinition}
 
 評測結果：
-- 高敏感錨：${mainAnchorName}（${mainScore}分）— ${mainAnchorMeaning}
+- 核心錨：${mainAnchorName}（${mainScore}分）— ${mainAnchorMeaning}
 - 衝突錨：${conflictInfo.length > 0 ? conflictInfo.map(conflictItem => conflictItem.pair).join("、") : "無"}
 - 各維度得分：${scoresWithInterpretation.map(scoreItem => `${scoreItem.name}: ${scoreItem.score}分`).join("，")}`
         : `用户背景：${workExpDescription || "未指定"}
@@ -831,7 +875,7 @@ Assessment Results:
 阶段定义：${stageDefinition}
 
 评测结果：
-- 高敏感锚：${mainAnchorName}（${mainScore}分）— ${mainAnchorMeaning}
+- 核心锚：${mainAnchorName}（${mainScore}分）— ${mainAnchorMeaning}
 - 冲突锚：${conflictInfo.length > 0 ? conflictInfo.map(conflictItem => conflictItem.pair).join("、") : "无"}
 - 各维度得分：${scoresWithInterpretation.map(scoreItem => `${scoreItem.name}: ${scoreItem.score}分`).join("，")}`;
 
@@ -945,6 +989,122 @@ Generate a stage-aware action plan in JSON format:
     "适合${stageLabel}的定期自检问题"
   ]
 }`;
+
+    } else if (analysisType === "dual_anchor") {
+      // Dual-anchor structural interpretation
+      const dualAnchors = (result as any).dualAnchors as { code1: string; score1: number; code2: string; score2: number } | undefined;
+      if (!dualAnchors) throw new Error("dualAnchors field required for dual_anchor analysis");
+
+      const anchor1Name = dimNames[dualAnchors.code1] || dualAnchors.code1;
+      const anchor2Name = dimNames[dualAnchors.code2] || dualAnchors.code2;
+      const anchor1Meaning = anchorMeanings[dualAnchors.code1] || "";
+      const anchor2Meaning = anchorMeanings[dualAnchors.code2] || "";
+
+      systemPrompt = isEnglish
+        ? `You are a career anchor specialist producing a dual-anchor structural interpretation. Analyze how two dominant anchors interact, create synergy or tension, and shape career decision patterns.
+
+OUTPUT STYLE:
+- Professional, analytical report tone — like a structured career assessment written by a senior expert
+- Development-oriented, not labeling
+- No clichés or motivational fluff
+- ALWAYS use second person (you/your)
+- Write continuous prose paragraphs, NOT bullet points or numbered lists
+
+${stageInstructions}${enterpriseRules}`
+        : isTW
+        ? `你是一位職業錨專家，正在產出雙錨結構解讀。分析兩個主導錨點如何互動、產生協同或張力，以及如何塑造職涯決策模式。
+
+【語言要求 — 最高優先級】全程使用繁體中文（台灣用語）。嚴格禁止簡體中文。
+
+輸出風格：
+- 專業、分析性的報告語氣，像一份結構化的職業評估報告
+- 發展導向，不標籤化
+- 不雞湯，不空洞
+- 全程使用第二人稱（你/你的）
+- 用連續的段落敘述，不要用條列式或編號清單
+
+${stageInstructions}${enterpriseRules}`
+        : `你是一位职业锚专家，正在产出双锚结构解读。分析两个主导锚点如何互动、产生协同或张力，以及如何塑造职涯决策模式。
+
+输出风格：
+- 专业、分析性的报告语气，像一份结构化的职业评估报告
+- 发展导向，不标签化
+- 不鸡汤，不空洞
+- 全程使用第二人称（你/你的）
+- 用连续的段落叙述，不要用条列式或编号清单
+
+${stageInstructions}${enterpriseRules}`;
+
+      userPrompt = isEnglish
+        ? `Career Stage: ${stageLabel}
+Stage Definition: ${stageDefinition}
+
+Dual-Anchor Combination:
+- Anchor 1: ${anchor1Name} (${dualAnchors.score1} points) — core meaning: ${anchor1Meaning}
+- Anchor 2: ${anchor2Name} (${dualAnchors.score2} points) — core meaning: ${anchor2Meaning}
+
+All dimension scores: ${scoresWithInterpretation.map(s => `${s.name}: ${s.score}`).join(", ")}
+
+Generate a dual-anchor structural interpretation in JSON:
+{
+  "dualAnchorInterpretation": "A comprehensive 3-4 paragraph interpretation covering: (1) How these two anchors interact and create a unique career decision pattern at the ${stageLabel} stage; (2) The synergy - what makes this combination powerful; (3) The tension points - where these two anchors may pull in different directions; (4) Practical implications for career choices at this stage. Write in continuous prose, not bullets."
+}`
+        : isTW
+        ? `職業階段：${stageLabel}\n階段定義：${stageDefinition}\n\n雙錨組合：\n- 錨點1：${anchor1Name}（${dualAnchors.score1}分）— 核心含義：${anchor1Meaning}\n- 錨點2：${anchor2Name}（${dualAnchors.score2}分）— 核心含義：${anchor2Meaning}\n\n各維度得分：${scoresWithInterpretation.map(s => `${s.name}: ${s.score}分`).join("，")}\n\n請產出雙錨結構解讀，JSON格式：\n{\n  "dualAnchorInterpretation": "3-4段綜合解讀，涵蓋：(1) 這兩個錨點在${stageLabel}如何互動，形成獨特的職涯決策模式；(2) 協同效應——這個組合的獨特優勢；(3) 張力點——這兩個錨點可能產生的方向性拉扯；(4) 對此階段職涯選擇的實際意義。用連續段落書寫，不要條列。"\n}`
+        : `职业阶段：${stageLabel}\n阶段定义：${stageDefinition}\n\n双锚组合：\n- 锚点1：${anchor1Name}（${dualAnchors.score1}分）— 核心含义：${anchor1Meaning}\n- 锚点2：${anchor2Name}（${dualAnchors.score2}分）— 核心含义：${anchor2Meaning}\n\n各维度得分：${scoresWithInterpretation.map(s => `${s.name}: ${s.score}分`).join("，")}\n\n请产出双锚结构解读，JSON格式：\n{\n  "dualAnchorInterpretation": "3-4段综合解读，涵盖：(1) 这两个锚点在${stageLabel}如何互动，形成独特的职涯决策模式；(2) 协同效应——这个组合的独特优势；(3) 张力点——这两个锚点可能产生的方向性拉扯；(4) 对此阶段职涯选择的实际意义。用连续段落书写，不要条列。"\n}`;
+
+    } else if (analysisType === "tri_anchor") {
+      // Triple-anchor archetype interpretation
+      const triAnchors = (result as any).triAnchors as { code1: string; score1: number; code2: string; score2: number; code3: string; score3: number } | undefined;
+      if (!triAnchors) throw new Error("triAnchors field required for tri_anchor analysis");
+
+      const a1Name = dimNames[triAnchors.code1] || triAnchors.code1;
+      const a2Name = dimNames[triAnchors.code2] || triAnchors.code2;
+      const a3Name = dimNames[triAnchors.code3] || triAnchors.code3;
+      const a1Meaning = anchorMeanings[triAnchors.code1] || "";
+      const a2Meaning = anchorMeanings[triAnchors.code2] || "";
+      const a3Meaning = anchorMeanings[triAnchors.code3] || "";
+
+      systemPrompt = isEnglish
+        ? `You are a career anchor specialist producing a triple-anchor archetype interpretation. Analyze how three top anchors form an archetype pattern that defines career identity and decision architecture.
+
+OUTPUT STYLE:
+- Professional, analytical report tone — like a structured career assessment written by a senior expert
+- Development-oriented, not labeling
+- No clichés or motivational fluff
+- ALWAYS use second person (you/your)
+- Write continuous prose paragraphs, NOT bullet points or numbered lists
+
+${stageInstructions}${enterpriseRules}`
+        : isTW
+        ? `你是一位職業錨專家，正在產出三錨結構解讀。分析三個頂部錨點如何形成一個原型模式，定義職涯身份和決策架構。
+
+【語言要求 — 最高優先級】全程使用繁體中文（台灣用語）。嚴格禁止簡體中文。
+
+輸出風格：
+- 專業、分析性的報告語氣，像一份結構化的職業評估報告
+- 發展導向，不標籤化
+- 不雞湯，不空洞
+- 全程使用第二人稱（你/你的）
+- 用連續的段落敘述，不要用條列式或編號清單
+
+${stageInstructions}${enterpriseRules}`
+        : `你是一位职业锚专家，正在产出三锚结构解读。分析三个顶部锚点如何形成一个原型模式，定义职涯身份和决策架构。
+
+输出风格：
+- 专业、分析性的报告语气，像一份结构化的职业评估报告
+- 发展导向，不标签化
+- 不鸡汤，不空洞
+- 全程使用第二人称（你/你的）
+- 用连续的段落叙述，不要用条列式或编号清单
+
+${stageInstructions}${enterpriseRules}`;
+
+      userPrompt = isEnglish
+        ? `Career Stage: ${stageLabel}\nStage Definition: ${stageDefinition}\n\nTriple-Anchor Combination:\n- Anchor 1: ${a1Name} (${triAnchors.score1} points) — ${a1Meaning}\n- Anchor 2: ${a2Name} (${triAnchors.score2} points) — ${a2Meaning}\n- Anchor 3: ${a3Name} (${triAnchors.score3} points) — ${a3Meaning}\n\nAll dimension scores: ${scoresWithInterpretation.map(s => `${s.name}: ${s.score}`).join(", ")}\n\nGenerate a triple-anchor archetype interpretation in JSON:\n{\n  "archetypeName": "A 2-4 word name for this three-anchor combination archetype (creative, not generic)",\n  "triAnchorInterpretation": "A comprehensive 3-5 paragraph interpretation covering: (1) What archetype pattern these three anchors create together — the overarching career identity; (2) How they form a decision-making architecture at the ${stageLabel} stage; (3) The unique strengths of this triple combination; (4) Internal tensions and which anchor pairs within the trio may conflict; (5) What career environments and roles best serve this archetype. Write in continuous prose."\n}`
+        : isTW
+        ? `職業階段：${stageLabel}\n階段定義：${stageDefinition}\n\n三錨組合：\n- 錨點1：${a1Name}（${triAnchors.score1}分）— ${a1Meaning}\n- 錨點2：${a2Name}（${triAnchors.score2}分）— ${a2Meaning}\n- 錨點3：${a3Name}（${triAnchors.score3}分）— ${a3Meaning}\n\n各維度得分：${scoresWithInterpretation.map(s => `${s.name}: ${s.score}分`).join("，")}\n\n請產出三錨結構解讀，JSON格式：\n{\n  "archetypeName": "此三錨組合原型的2-4字命名（創意命名，非通用）",\n  "triAnchorInterpretation": "3-5段綜合解讀，涵蓋：(1) 這三個錨點共同構成的原型模式——整體職涯身份；(2) 在${stageLabel}如何形成決策架構；(3) 此三元組合的獨特優勢；(4) 內部張力——三者之間哪些對可能衝突；(5) 最適合此原型的職涯環境和角色。用連續段落書寫。"\n}`
+        : `职业阶段：${stageLabel}\n阶段定义：${stageDefinition}\n\n三锚组合：\n- 锚点1：${a1Name}（${triAnchors.score1}分）— ${a1Meaning}\n- 锚点2：${a2Name}（${triAnchors.score2}分）— ${a2Meaning}\n- 锚点3：${a3Name}（${triAnchors.score3}分）— ${a3Meaning}\n\n各维度得分：${scoresWithInterpretation.map(s => `${s.name}: ${s.score}分`).join("，")}\n\n请产出三锚结构解读，JSON格式：\n{\n  "archetypeName": "此三锚组合原型的2-4字命名（创意命名，非通用）",\n  "triAnchorInterpretation": "3-5段综合解读，涵盖：(1) 这三个锚点共同构成的原型模式——整体职涯身份；(2) 在${stageLabel}如何形成决策架构；(3) 此三元组合的独特优势；(4) 内部张力——三者之间哪些对可能冲突；(5) 最适合此原型的职涯环境和角色。用连续段落书写。"\n}`;
 
     } else {
       // career_path — legacy support

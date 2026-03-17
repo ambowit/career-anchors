@@ -167,7 +167,7 @@ export default function AdminDashboardPage() {
               <div>
                 <h3 className="font-semibold text-foreground">{t("admin.anchorDistribution")}</h3>
                 <p className="text-xs text-muted-foreground">
-                  {language === "en" ? "High-sensitivity anchor statistics" : language === "zh-TW" ? "高敏感錨類型統計" : "高敏感锚类型统计"}
+                  {language === "en" ? "Core anchor type statistics" : language === "zh-TW" ? "核心錨類型統計" : "核心锚类型统计"}
                 </p>
               </div>
             </div>

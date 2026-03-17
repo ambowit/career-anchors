@@ -1,12 +1,15 @@
 import { motion } from "framer-motion";
 import { Users, ClipboardList, TrendingUp, Clock, ArrowUpRight, Target, BarChart3, Loader2 } from "lucide-react";
 import { useTranslation } from "@/hooks/useLanguage";
-import { useOrgDashboardStats, useOrgDepartments } from "@/hooks/useAdminData";
+import { useOrgDashboardStats, useOrgDepartments, useOrgInfo } from "@/hooks/useAdminData";
 
 export default function OrgDashboardPage() {
   const { language } = useTranslation();
   const { data: dashStats, isLoading: loadingStats } = useOrgDashboardStats();
   const { data: departments, isLoading: loadingDepts } = useOrgDepartments();
+  const { data: orgInfo } = useOrgInfo();
+  const orgName = orgInfo?.name || "";
+  const orgLogoUrl = orgInfo?.logo_url || "";
 
   if (loadingStats || loadingDepts) {
     return (
@@ -23,11 +26,14 @@ export default function OrgDashboardPage() {
     { label: language === "en" ? "Avg. Time" : language === "zh-TW" ? "平均用時" : "平均用时", value: dashStats?.avgTimeMinutes || "0m", icon: Clock, color: "#8b5cf6" },
   ];
 
-  const topLevelDepts = (departments || []).filter((department) => !department.parent_department_id);
+  const allDepts = departments || [];
+  const topLevelDepts = allDepts.filter((department) => !department.parent_department_id);
 
+  // Aggregate: parent dept totals include members from all child (sub) departments
   const departmentStats = topLevelDepts.map((department) => {
-    const total = department.memberCount || 0;
-    const completed = department.completedAssessments || 0;
+    const childDepts = allDepts.filter((child) => child.parent_department_id === department.id);
+    const total = (department.memberCount || 0) + childDepts.reduce((sum, child) => sum + (child.memberCount || 0), 0);
+    const completed = (department.completedAssessments || 0) + childDepts.reduce((sum, child) => sum + (child.completedAssessments || 0), 0);
     const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
     return {
       name: department.name,
@@ -45,11 +51,14 @@ export default function OrgDashboardPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground mb-1">{language === "en" ? "Organization Dashboard" : language === "zh-TW" ? "機構儀表板" : "机构仪表盘"}</h1>
+        <h1 className="text-2xl font-bold text-foreground mb-1 flex items-center gap-2.5">
+          {orgLogoUrl && <img src={orgLogoUrl} alt="" className="h-8 w-8 rounded-lg object-contain border border-border/50" />}
+          {orgName ? `${orgName} ${language === "en" ? "Dashboard" : language === "zh-TW" ? "儀表板" : "仪表盘"}` : (language === "en" ? "Organization Dashboard" : language === "zh-TW" ? "機構儀表板" : "机构仪表盘")}
+        </h1>
         <p className="text-sm text-muted-foreground">{language === "en" ? "Overview of your organization's assessment activity" : language === "zh-TW" ? "機構測評活動概覽" : "机构测评活动概览"}</p>
       </div>
 
-      <div className="grid grid-cols-4 gap-5 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-5 mb-8">
         {stats.map((stat, index) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.08 }} className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-start justify-between mb-3">
@@ -63,8 +72,8 @@ export default function OrgDashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="col-span-2 bg-card border border-border rounded-xl p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="sm:col-span-2 bg-card border border-border rounded-xl p-4 sm:p-6">
           <div className="flex items-center gap-2 mb-5">
             <BarChart3 className="w-4 h-4 text-muted-foreground" />
             <h3 className="font-semibold text-foreground text-sm">{language === "en" ? "Department Progress" : language === "zh-TW" ? "部門完成進度" : "部门完成进度"}</h3>
@@ -75,7 +84,7 @@ export default function OrgDashboardPage() {
             <div className="space-y-4">
               {departmentStats.map((dept) => (
                 <div key={dept.name} className="flex items-center gap-4">
-                  <div className="w-24 text-sm text-muted-foreground truncate">{dept.name}</div>
+                  <div className="w-16 sm:w-24 text-xs sm:text-sm text-muted-foreground truncate flex-shrink-0">{dept.name}</div>
                   <div className="flex-1">
                     <div className="h-7 bg-muted/20 rounded-lg overflow-hidden relative">
                       <motion.div initial={{ width: 0 }} animate={{ width: `${dept.rate}%` }} transition={{ duration: 0.6, delay: 0.3 }} className="h-full rounded-lg bg-sky-500" />

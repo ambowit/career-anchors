@@ -44,12 +44,12 @@ export default function HowToUsePage() {
       module2Note: "高分不是优势，低分不是短板。它们只是对你来说的重要程度不同。",
       
       // Module 3: High-Sensitivity Anchor
-      module3Title: "如何使用你的「高敏感锚」",
-      module3Subtitle: "你的高敏感锚，是一条『底线』",
+      module3Title: "如何使用你的「核心锚」",
+      module3Subtitle: "你的核心锚，是一条『底线』",
       module3Points: [
         {
           trigger: "当你做重大选择前（转型 / 升职 / 创业）",
-          action: "先问：「这个选择，会不会长期踩到我的高敏感锚？」",
+          action: "先问：「这个选择，会不会长期踩到我的核心锚？」",
         },
         {
           trigger: "当你持续感到抗拒、疲惫、麻木时",
@@ -82,7 +82,7 @@ export default function HowToUsePage() {
       module6Note: "这不是每天看的东西，而是人生关键路口的参考。",
       
       // Closing
-      closingQuote: "你不是不能做别的选择，而是当你走得够远，有些东西不能被反复牺牲。",
+      closingQuote: "你不是不能做别的选择，而是当你走得够远，有些要素是您的核心坚持。",
       closingNote: "SCPC 结果是长期参考，不是一次性结论。",
       
       // Navigation
@@ -111,12 +111,12 @@ export default function HowToUsePage() {
       ],
       module2Note: "高分不是優勢，低分不是劣勢。它們只是對你來說的重要程度不同。",
       
-      module3Title: "如何使用你的「高敏感錨」",
-      module3Subtitle: "你的高敏感錨，是一條「底線」",
+      module3Title: "如何使用你的「核心錨」",
+      module3Subtitle: "你的核心錨，是一條「底線」",
       module3Points: [
         {
           trigger: "當你做重大選擇前（轉型 / 升職 / 創業）",
-          action: "先問：「這個選擇，會不會長期踩到我的高敏感錨？」",
+          action: "先問：「這個選擇，會不會長期踩到我的核心錨？」",
         },
         {
           trigger: "當你持續感到抗拒、疲憊、麻木時",
@@ -146,7 +146,7 @@ export default function HowToUsePage() {
       ],
       module6Note: "這不是每天看的東西，而是人生關鍵路口的參考。",
       
-      closingQuote: "你不是不能做別的選擇，而是當你走得夠遠，有些東西不能被反覆犧牲。",
+      closingQuote: "你不是不能做別的選擇，而是當你走得夠遠，有些要素是您的核心堅持。",
       closingNote: "SCPC 結果是長期參考，不是一次性結論。",
       
       backToResults: "返回結果",
@@ -156,7 +156,7 @@ export default function HowToUsePage() {
       pageLabel: "Usage Guide",
       title: "How to Use Your SCPC Results for Long-term Career Decisions",
       subtitle: "This is not an answer—it's a navigation map to help you avoid the wrong path",
-      reminder: "Remember: This result doesn't tell you what to do. It tells you what cannot be repeatedly sacrificed long-term.",
+      reminder: "Remember: This result doesn't tell you what to do. It tells you which elements are your core commitments long-term.",
       
       module1Title: "What This Result Is",
       module1NotList: ["Not an ability assessment", "Not a personality label", "Not a job recommendation"],
@@ -174,12 +174,12 @@ export default function HowToUsePage() {
       ],
       module2Note: "High scores aren't advantages, low scores aren't weaknesses. They simply represent different levels of importance to you.",
       
-      module3Title: "How to Use Your High-Sensitivity Anchor",
-      module3Subtitle: "Your high-sensitivity anchor is a 'bottom line'",
+      module3Title: "How to Use Your Core Anchor",
+      module3Subtitle: "Your core anchor is a 'bottom line'",
       module3Points: [
         {
           trigger: "Before major decisions (career change / promotion / starting a business)",
-          action: "Ask first: 'Will this choice step on my high-sensitivity anchor long-term?'",
+          action: "Ask first: 'Will this choice step on my core anchor long-term?'",
         },
         {
           trigger: "When you feel persistent resistance, fatigue, or numbness",

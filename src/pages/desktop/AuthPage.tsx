@@ -6,9 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Shield, Building2, Globe } from "lucide-react";
-import { getConsolePath } from "@/lib/permissions";
-import type { RoleType } from "@/lib/permissions";
-import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "@/hooks/useLanguage";
 
 export default function AuthPage() {
@@ -36,19 +33,8 @@ export default function AuthPage() {
           toast.error(language === "en" ? "Login failed" : language === "zh-TW" ? "登入失敗" : "登录失败", { description: error.message });
         } else {
           toast.success(language === "en" ? "Logged in" : language === "zh-TW" ? "登入成功" : "登录成功");
-          // Fetch profile and redirect admin users to their console
-          const { data: { user: currentUser } } = await supabase.auth.getUser();
-          if (currentUser) {
-            const { data: userProfile } = await supabase
-              .from("profiles")
-              .select("role_type")
-              .eq("id", currentUser.id)
-              .single();
-            const consolePath = getConsolePath((userProfile?.role_type || "individual") as RoleType);
-            navigate(consolePath !== "/" ? consolePath : "/");
-          } else {
-            navigate("/");
-          }
+          // Always navigate to home first; users can switch to admin console manually
+          navigate("/");
         }
       } else {
         const { error } = await signUpWithEmail(email, password, fullName);

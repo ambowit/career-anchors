@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 import { Target, Zap, AlertTriangle } from "lucide-react";
-import { DIMENSIONS, type AssessmentResult, getHighSensitivityAnchors } from "@/hooks/useAssessment";
+import { DIMENSIONS, type AssessmentResult, getCoreAdvantageAnchors } from "@/hooks/useAssessment";
 import { useTranslation } from "@/hooks/useLanguage";
 import { cn } from "@/lib/utils";
 
@@ -18,22 +18,22 @@ const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
       return DIMENSIONS[dim as keyof typeof DIMENSIONS]?.[language] || dim;
     };
 
-    const highSensAnchors = results.highSensitivityAnchors?.length
-      ? results.highSensitivityAnchors
-      : getHighSensitivityAnchors(results.scores);
-    const hasHighSens = highSensAnchors.length > 0;
-    const displayAnchor = highSensAnchors[0] || results.mainAnchor || "";
+    const coreAdvAnchors = results.coreAdvantageAnchors?.length
+      ? results.coreAdvantageAnchors
+      : getCoreAdvantageAnchors(results.scores);
+    const hasHighSens = coreAdvAnchors.length > 0;
+    const displayAnchor = coreAdvAnchors[0] || results.mainAnchor || "";
     const displayAnchorName = getDimensionName(displayAnchor);
 
     // Multilingual texts
     const texts = {
       "zh-CN": {
         reportTitle: "职业锚测评报告",
-        highSensAnchor: "高敏感锚",
-        noHighSens: "无高敏感锚",
+        coreAdvantageAnchor: "核心优势锚点",
+        noHighSens: "无核心优势锚点",
 
         scoreDistribution: "维度得分分布",
-        riskIndex: "风险指数",
+        riskIndex: "锚定清晰度",
         stability: "稳定度",
         mature: "成熟稳定",
         developing: "发展中",
@@ -43,11 +43,11 @@ const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
       },
       "zh-TW": {
         reportTitle: "職業錨測評報告",
-        highSensAnchor: "高敏感錨",
-        noHighSens: "無高敏感錨",
+        coreAdvantageAnchor: "核心優勢錨點",
+        noHighSens: "無核心優勢錨點",
 
         scoreDistribution: "維度得分分佈",
-        riskIndex: "風險指數",
+        riskIndex: "錨定清晰度",
         stability: "穩定度",
         mature: "成熟穩定",
         developing: "發展中",
@@ -57,11 +57,11 @@ const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
       },
       "en": {
         reportTitle: "Career Anchor Report",
-        highSensAnchor: "High-Sensitivity",
-        noHighSens: "No High-Sensitivity Anchor",
+        coreAdvantageAnchor: "Core Advantage",
+        noHighSens: "No Core Advantage Anchor",
 
         scoreDistribution: "Score Distribution",
-        riskIndex: "Risk Index",
+        riskIndex: "Clarity Index",
         stability: "Stability",
         mature: "Mature",
         developing: "Developing",
@@ -79,7 +79,7 @@ const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
         key,
         name: getDimensionName(key),
         score,
-        isHighSens: highSensAnchors.includes(key),
+        isCoreAdv: coreAdvAnchors.includes(key),
       }))
       .sort((a, b) => b.score - a.score);
 
@@ -114,7 +114,7 @@ const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
           <div className="flex items-center gap-2 mb-2">
             <Target className="w-4 h-4" />
             <span className="text-xs font-medium opacity-80">
-              {hasHighSens ? txt.highSensAnchor : txt.noHighSens}
+              {hasHighSens ? txt.coreAdvantageAnchor : txt.noHighSens}
             </span>
           </div>
           {hasHighSens ? (
@@ -139,7 +139,7 @@ const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
           <div className="space-y-2">
             {(() => {
               const maxScoreVal = sortedScores[0]?.score || 1;
-              return sortedScores.slice(0, 5).map(({ key, name, score, isHighSens }) => (
+              return sortedScores.slice(0, 5).map(({ key, name, score, isCoreAdv }) => (
                 <div key={key} className="flex items-center gap-3">
                   <div className="w-16 text-xs text-muted-foreground truncate">
                     {name.substring(0, 4)}
@@ -148,7 +148,7 @@ const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
                     <div
                       className={cn(
                         "h-full rounded-full transition-all",
-                        isHighSens ? "bg-primary" : "bg-muted-foreground/30"
+                        isCoreAdv ? "bg-primary" : "bg-muted-foreground/30"
                       )}
                       style={{ width: `${Math.min((score / maxScoreVal) * 100, 100)}%` }}
                     />
@@ -156,7 +156,7 @@ const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
                   <div
                     className={cn(
                       "w-10 text-xs font-medium text-right tabular-nums",
-                      isHighSens ? "text-primary" : "text-muted-foreground"
+                      isCoreAdv ? "text-primary" : "text-muted-foreground"
                     )}
                   >
                     {score}

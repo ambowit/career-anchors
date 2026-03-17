@@ -391,7 +391,7 @@ export default function CertificationReviewPage() {
               <TabsTrigger key={tab} value={tab} className="gap-1.5">
                 {tab === "all" ? txt.all : tab}
                 {(applicationsByCertCode[tab] || []).length > 0 && (
-                  <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs">
+                  <Badge variant="secondary" className="ml-1 px-1.5 h-5 text-xs">
                     {(applicationsByCertCode[tab] || []).length}
                   </Badge>
                 )}
@@ -442,7 +442,7 @@ export default function CertificationReviewPage() {
                             <div>
                               <div className="font-medium text-foreground flex items-center gap-2">
                                 {app.full_name_zh || userProfile?.full_name || "—"}
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                                <Badge variant="outline" className="text-[10px] px-1.5 h-5 font-mono">
                                   {certCode}
                                 </Badge>
                               </div>

@@ -207,7 +207,7 @@ export const QUESTIONS_DATA: QuestionData[] = [
     itemNumber: 8,
     text: {
       "zh-CN": "比起当技术专家，我更向往跨部门整合、做高层决策的工作。",
-      "zh-TW": "比起當技術專家，我更向往跨部門整合、做高層決策的工作。",
+      "zh-TW": "比起當技術專家，我更嚮往跨部門整合、做高層決策的工作。",
       en: "Leading across functions and making high-level decisions appeals to me more than remaining a specialist.",
     },
     type: "likert",
@@ -875,9 +875,9 @@ export function standardizeScores(rawScores: Record<string, number>): Record<str
 
 // Score interpretation thresholds (standardized 0-100 scale)
 export const SCORE_INTERPRETATION = {
-  nonNegotiable: { min: 80, max: 100, labelZh: "不可妥协的长期约束", labelZhTW: "不可妥協的長期約束", labelEn: "Non-negotiable Long-term Constraint" },
-  highSensitive: { min: 65, max: 79, labelZh: "高敏感约束，可短期妥协", labelZhTW: "高敏感約束，可短期妥協", labelEn: "High-sensitivity Constraint" },
-  conditional: { min: 45, max: 64, labelZh: "条件性约束", labelZhTW: "條件性約束", labelEn: "Conditional Constraint" },
+  coreAdvantage: { min: 80, max: 100, labelZh: "核心优势锚点", labelZhTW: "核心優勢錨點", labelEn: "Core Advantage Anchor" },
+  highSensitive: { min: 65, max: 79, labelZh: "高敏感区", labelZhTW: "高敏感區", labelEn: "High-Sensitivity Zone" },
+  moderate: { min: 45, max: 64, labelZh: "中度影响", labelZhTW: "中度影響", labelEn: "Moderate Influence" },
   nonCore: { min: 0, max: 44, labelZh: "非核心维度", labelZhTW: "非核心維度", labelEn: "Non-core Dimension" },
 };
 

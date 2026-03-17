@@ -127,7 +127,7 @@ export default function CduMonitoringPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
           { label: { en: "Total Records", "zh-TW": "總記錄", "zh-CN": "总记录" }[langKey]!, value: stats.total, icon: BookOpen, color: "text-slate-600" },
           { label: { en: "Pending Review", "zh-TW": "待審核", "zh-CN": "待审核" }[langKey]!, value: stats.pending, icon: Clock, color: "text-amber-600" },

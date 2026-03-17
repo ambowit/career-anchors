@@ -526,7 +526,7 @@ function SingleCertResult({
         {/* Cert code badge */}
         {certCode && (
           <div className="mb-5">
-            <Badge variant="outline" className="font-mono text-sm px-3 py-1 border-[#1C2857]/20 text-[#1C2857]">
+            <Badge variant="outline" className="font-mono text-sm px-3 border-[#1C2857]/20 text-[#1C2857]">
               {certCode}
             </Badge>
             <span className="ml-2 text-sm text-slate-500">{getCertTypeName(certCode)}</span>
@@ -601,7 +601,7 @@ function NameSearchResultCard({
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               {certCode && (
-                <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0 h-5">
+                <Badge variant="outline" className="font-mono text-[10px] px-1.5 h-5">
                   {certCode}
                 </Badge>
               )}
@@ -630,7 +630,7 @@ function NameSearchResultCard({
             <div className="px-5 pb-5 pt-1 border-t border-slate-100">
               {certCode && (
                 <div className="mb-4">
-                  <Badge variant="outline" className="font-mono text-sm px-3 py-1 border-[#1C2857]/20 text-[#1C2857]">
+                  <Badge variant="outline" className="font-mono text-sm px-3 border-[#1C2857]/20 text-[#1C2857]">
                     {certCode}
                   </Badge>
                   <span className="ml-2 text-sm text-slate-500">{getCertTypeName(certCode)}</span>

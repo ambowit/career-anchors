@@ -29,12 +29,15 @@ import {
   TableProperties,
   ListChecks,
   Upload,
-  Briefcase,
   Gift,
+  Tag,
   Blocks,
   Cog,
   Heart,
   Combine,
+  UserCheck,
+  ScanEye,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -77,6 +80,7 @@ export default function SuperAdminLayout() {
       items: [
         { path: "/super-admin", icon: LayoutDashboard, label: language === "en" ? "Dashboard" : language === "zh-TW" ? "儀表板" : "仪表盘", end: true },
         { path: "/super-admin/organizations", icon: Building2, label: language === "en" ? "Organizations" : language === "zh-TW" ? "機構管理" : "机构管理" },
+        { path: "/super-admin/org-types", icon: Tag, label: language === "en" ? "Org Types" : language === "zh-TW" ? "機構類型" : "机构类型" },
         { path: "/super-admin/consultants", icon: UserCog, label: language === "en" ? "Consultants" : language === "zh-TW" ? "諮詢師管理" : "咨询师管理" },
         { path: "/super-admin/users", icon: Users, label: language === "en" ? "User Management" : language === "zh-TW" ? "使用者管理" : "用户管理" },
         { path: "/super-admin/roles", icon: ShieldCheck, label: language === "en" ? "Role Management" : language === "zh-TW" ? "角色管理" : "角色管理" },
@@ -86,11 +90,10 @@ export default function SuperAdminLayout() {
       label: language === "en" ? "Content" : language === "zh-TW" ? "內容管理" : "内容管理",
       items: [
         { path: "/super-admin/questions", icon: FileQuestion, label: language === "en" ? "Question Bank" : language === "zh-TW" ? "題庫管理" : "题库管理" },
-        { path: "/super-admin/report-templates", icon: FileBarChart, label: language === "en" ? "Report Templates" : language === "zh-TW" ? "報告模板" : "报告模板" },
-        { path: "/super-admin/report-generator", icon: Blocks, label: language === "en" ? "Report Generator" : language === "zh-TW" ? "報告生成器" : "报告生成器" },
+        { path: "/super-admin/report-generator", icon: Blocks, label: language === "en" ? "Career Anchor Report Generator" : language === "zh-TW" ? "職業錨報告生成器" : "职业锚报告生成器" },
         { path: "/super-admin/assessment-reports", icon: BarChart3, label: language === "en" ? "Assessment Reports" : language === "zh-TW" ? "測評報告" : "测评报告" },
-        { path: "/super-admin/life-cards", icon: Heart, label: language === "en" ? "Life Card Mgmt" : language === "zh-TW" ? "人生卡管理" : "人生卡管理" },
-        { path: "/super-admin/fusion-rules", icon: Combine, label: language === "en" ? "Fusion Rules" : language === "zh-TW" ? "融合規則" : "融合规则" },
+        { path: "/super-admin/life-cards", icon: Heart, label: language === "en" ? "Espresso Card Report Generator" : language === "zh-TW" ? "理想人生報告生成器" : "理想人生报告生成器" },
+        { path: "/super-admin/fusion-rules", icon: Combine, label: language === "en" ? "Integration Rules" : language === "zh-TW" ? "整合規則" : "整合规则" },
       ],
     },
     {
@@ -107,12 +110,19 @@ export default function SuperAdminLayout() {
       ],
     },
     {
+      label: language === "en" ? "Assessment Center" : language === "zh-TW" ? "施測中心" : "施测中心",
+      items: [
+        { path: "/super-admin/batch-assessment", icon: Layers, label: language === "en" ? "Batch Assessment" : language === "zh-TW" ? "批次施測" : "批次施测", end: true },
+        { path: "/super-admin/anonymous-assessment", icon: ScanEye, label: language === "en" ? "Anonymous Assessment" : language === "zh-TW" ? "匿名測評" : "匿名测评", end: true },
+        { path: "/super-admin/anonymous-assessment/permissions", icon: ShieldAlert, label: language === "en" ? "Permissions" : language === "zh-TW" ? "權限設定" : "权限设置" },
+      ],
+    },
+    {
       label: language === "en" ? "System" : language === "zh-TW" ? "系統" : "系统",
       items: [
         { path: "/super-admin/sso", icon: KeyRound, label: language === "en" ? "SSO Config" : language === "zh-TW" ? "SSO 配置" : "SSO 配置" },
         { path: "/super-admin/subscriptions", icon: CreditCard, label: language === "en" ? "Subscriptions" : language === "zh-TW" ? "訂閱管理" : "订阅管理" },
         { path: "/super-admin/membership-rules", icon: Layers, label: language === "en" ? "Membership Rules" : language === "zh-TW" ? "會員規則" : "会员规则" },
-        { path: "/super-admin/partner-review", icon: Briefcase, label: language === "en" ? "Partner Review" : language === "zh-TW" ? "合作方審核" : "合作方审核" },
         { path: "/super-admin/reward-management", icon: Gift, label: language === "en" ? "Reward Management" : language === "zh-TW" ? "贈點管理" : "赠点管理" },
         { path: "/super-admin/cp-rules", icon: Cog, label: language === "en" ? "CP Rules Engine" : language === "zh-TW" ? "CP 規則引擎" : "CP 规则引擎" },
         { path: "/super-admin/messages", icon: MessageSquareWarning, label: language === "en" ? "Message Monitor" : language === "zh-TW" ? "訊息監控" : "消息监控" },
@@ -326,7 +336,7 @@ export default function SuperAdminLayout() {
         {/* Top bar */}
         <div className={cn(
           "flex items-center justify-between border-b border-slate-200 bg-white sticky top-0 z-10",
-          isMobile ? "h-14 px-4" : "h-16 px-8"
+          isMobile ? "h-14 px-4 pt-[env(safe-area-inset-top)]" : "h-16 px-8"
         )}>
           <div className="flex items-center gap-3">
             {isMobile && (
@@ -342,9 +352,19 @@ export default function SuperAdminLayout() {
               {language === "en" ? "Platform Control Center" : language === "zh-TW" ? "平台控制中心" : "平台控制中心"}
             </span>
           </div>
-          <LanguageSwitcher />
+          <div className="flex items-center gap-2">
+            {isMobile && (
+              <button
+                onClick={() => navigate("/")}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 transition-colors"
+              >
+                {language === "en" ? "User Mode" : language === "zh-TW" ? "使用者" : "使用者"}
+              </button>
+            )}
+            <LanguageSwitcher />
+          </div>
         </div>
-        <div className={cn(isMobile ? "p-4" : "p-8")}>
+        <div className={cn("admin-page-content", isMobile ? "p-4 overflow-x-auto" : "p-8")}>
           <Outlet />
         </div>
       </main>

@@ -197,7 +197,7 @@ export default function CertificationInfoCard({ langKey }: { langKey: "en" | "zh
           <h3 className="font-semibold text-foreground text-sm">{txt.certInfo}</h3>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="font-mono text-xs px-2 py-0.5 border-[#1C2857]/20 text-[#1C2857]">
+          <Badge variant="outline" className="font-mono text-xs px-2 h-6 border-[#1C2857]/20 text-[#1C2857]">
             {certCode}
           </Badge>
           <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColors.text} ${statusColors.bg}`}>

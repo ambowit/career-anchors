@@ -165,7 +165,7 @@ export default function CourseLibraryPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
         {[
           { label: { en: "Total Courses", "zh-TW": "總課程數", "zh-CN": "总课程数" }[langKey]!, value: stats.total, color: "text-slate-700" },
           { label: { en: "Active", "zh-TW": "啟用中", "zh-CN": "启用中" }[langKey]!, value: stats.active, color: "text-emerald-600" },

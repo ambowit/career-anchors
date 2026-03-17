@@ -19,13 +19,19 @@ export default function AuthCallbackPage() {
       }
 
       if (data.session) {
-        const { data: userProfile } = await supabase
-          .from("profiles")
-          .select("role_type")
-          .eq("id", data.session.user.id)
-          .single();
-        const consolePath = getConsolePath((userProfile?.role_type || "individual") as RoleType);
-        navigate(consolePath !== "/" ? consolePath : "/");
+        // On mobile, always land on user home — admin consoles are desktop-only
+        const isMobileView = window.innerWidth < 768;
+        if (isMobileView) {
+          navigate("/");
+        } else {
+          const { data: userProfile } = await supabase
+            .from("profiles")
+            .select("role_type")
+            .eq("id", data.session.user.id)
+            .single();
+          const consolePath = getConsolePath((userProfile?.role_type || "individual") as RoleType);
+          navigate(consolePath !== "/" ? consolePath : "/");
+        }
       } else {
         navigate("/auth");
       }

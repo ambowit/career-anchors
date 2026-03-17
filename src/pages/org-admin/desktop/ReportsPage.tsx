@@ -72,7 +72,7 @@ export default function OrgReportsPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-3 gap-5 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 mb-8">
         {quickActions.map((action, index) => (
           <motion.button
             key={action.label}
@@ -199,7 +199,7 @@ export default function OrgReportsPage() {
                 <div className="grid grid-cols-3 gap-2">
                   {([
                     { key: "pdf" as const, label: "PDF", desc: language === "en" ? "Rich report" : language === "zh-TW" ? "完整報告" : "完整报告" },
-                    { key: "excel" as const, label: "Excel", desc: language === "en" ? "Data analysis" : language === "zh-TW" ? "數據分析" : "数据分析" },
+                    { key: "excel" as const, label: "Excel", desc: language === "en" ? "Data analysis" : language === "zh-TW" ? "資料分析" : "数据分析" },
                     { key: "csv" as const, label: "CSV", desc: language === "en" ? "Raw data" : language === "zh-TW" ? "原始數據" : "原始数据" },
                   ]).map((format) => (
                     <button

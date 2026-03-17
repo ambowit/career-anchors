@@ -13,8 +13,8 @@ import { useTranslation } from "@/hooks/useLanguage";
 
 interface RadarChartProps {
   scores: Record<string, number>;
-  mainAnchor?: string; // Kept for backward compat, no longer highlighted as "主锚"
-  highSensitivityAnchors?: string[]; // Anchors with score > 80
+  mainAnchor?: string; // Kept for backward compat
+  coreAdvantageAnchors?: string[]; // Anchors with score >= 80
   animate?: boolean;
 }
 
@@ -24,7 +24,7 @@ const ANIMATION_EASING = "easeOut";
 export default function RadarChart({
   scores,
   mainAnchor,
-  highSensitivityAnchors = [],
+  coreAdvantageAnchors = [],
   animate = true,
 }: RadarChartProps) {
   const { language } = useTranslation();
@@ -95,7 +95,7 @@ export default function RadarChart({
     score: animatedScores[key] || 0,
     targetScore: scores[key] || 0,
     fullMark: chartDomain,
-    isHighSensitivity: highSensitivityAnchors.includes(key) || (highSensitivityAnchors.length === 0 && key === mainAnchor),
+    isCoreAdvantage: coreAdvantageAnchors.includes(key) || (coreAdvantageAnchors.length === 0 && key === mainAnchor),
   }));
 
   // Container animation variants
@@ -153,7 +153,7 @@ export default function RadarChart({
             dataKey="dimension"
             tick={({ payload, x, y, cx, cy }) => {
               const item = data.find((d) => d.dimension === payload.value);
-              const isMain = item?.isHighSensitivity;
+              const isMain = item?.isCoreAdvantage;
               const targetScore = item?.targetScore || 0;
 
               // Calculate position for label
@@ -213,10 +213,10 @@ export default function RadarChart({
             animationDuration={0} // Disable recharts internal animation, we handle it
             dot={(props) => {
               const { cx, cy, payload } = props;
-              const isHighSens = payload.isHighSensitivity;
+              const isCoreAdv = payload.isCoreAdvantage;
 
               // During animation, all dots are same size; after, high-sensitivity is larger
-              const baseRadius = isAnimating ? 4 : (isHighSens ? 6 : 4);
+              const baseRadius = isAnimating ? 4 : (isCoreAdv ? 6 : 4);
 
               return (
                 <circle

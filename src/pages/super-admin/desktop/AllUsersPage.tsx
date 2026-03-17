@@ -21,9 +21,12 @@ const roleColors: Record<string, string> = {
   consultant: "bg-emerald-100 text-emerald-700",
   client: "bg-teal-100 text-teal-700",
   individual: "bg-gray-100 text-gray-600",
+  collaborator: "bg-cyan-100 text-cyan-700",
+  partner: "bg-amber-100 text-amber-700",
 };
 
-const allRoles: RoleType[] = ["super_admin", "org_admin", "hr", "department_manager", "employee", "consultant", "client", "individual"];
+const allRoles: RoleType[] = ["super_admin", "org_admin", "hr", "department_manager", "employee", "consultant", "collaborator", "client", "individual", "partner"];
+const assignableRoles: RoleType[] = ["super_admin", "org_admin", "hr", "department_manager", "employee", "consultant", "collaborator", "client", "individual", "partner"];
 
 type ModalType = "create" | "import" | null;
 
@@ -358,7 +361,7 @@ export default function AllUsersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
         {[
           { label: language === "en" ? "Total" : language === "zh-TW" ? "總計" : "总计", count: users.length, icon: Users },
           { label: language === "en" ? "Org Users" : language === "zh-TW" ? "機構用戶" : "机构用户", count: users.filter(u => ["org_admin", "hr", "department_manager", "employee"].includes(u.role_type || "")).length, icon: Building2 },
@@ -372,7 +375,7 @@ export default function AllUsersPage() {
         ))}
       </div>
 
-      <div className="flex gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input type="text" placeholder={language === "en" ? "Search users..." : language === "zh-TW" ? "搜尋用戶..." : "搜索用户..."} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20" />
@@ -469,7 +472,7 @@ export default function AllUsersPage() {
                     onChange={(e) => setCreateForm({ ...createForm, roleType: e.target.value })}
                     className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm"
                   >
-                    {allRoles.map((r) => <option key={r} value={r}>{getRoleLabel(r, language)}</option>)}
+                    {assignableRoles.map((r) => <option key={r} value={r}>{getRoleLabel(r, language)}</option>)}
                   </select>
                 </div>
                 <div>
@@ -546,7 +549,7 @@ export default function AllUsersPage() {
                       onChange={(e) => setImportRoleType(e.target.value)}
                       className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm"
                     >
-                      {allRoles.map((r) => <option key={r} value={r}>{getRoleLabel(r, language)}</option>)}
+                      {assignableRoles.map((r) => <option key={r} value={r}>{getRoleLabel(r, language)}</option>)}
                     </select>
                   </div>
                   <div>
@@ -719,7 +722,7 @@ export default function AllUsersPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1.5">{language === "en" ? "Role" : "角色"}</label>
                   <select value={editingUser.role_type} onChange={(e) => setEditingUser({ ...editingUser, role_type: e.target.value })} className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm">
-                    {allRoles.map((r) => <option key={r} value={r}>{getRoleLabel(r, language)}</option>)}
+                    {assignableRoles.map((r) => <option key={r} value={r}>{getRoleLabel(r, language)}</option>)}
                   </select>
                 </div>
                 <div>

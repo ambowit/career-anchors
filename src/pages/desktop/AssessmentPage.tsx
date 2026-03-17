@@ -61,9 +61,9 @@ const PHASE_CONFIG = {
     labelZh: "复核确认",
     labelZhTW: "複核確認",
     labelEn: "Final Review",
-    descZh: "验证高敏感锚稳定性",
-    descZhTW: "驗證高敏感錨穩定性",
-    descEn: "Verifying high-sensitivity anchor stability",
+    descZh: "验证核心锚稳定性",
+    descZhTW: "驗證核心錨穩定性",
+    descEn: "Verifying core anchor stability",
   },
   complete: {
     icon: Target,
@@ -90,10 +90,22 @@ export default function AssessmentPage() {
   
   const startTimeRef = useRef<number>(Date.now());
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const hasCheckedProgressRef = useRef(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const lastSavedRef = useRef<string>("");
+  // Stable refs — updated every render, read inside effects to avoid stale closures
+  const userRef = useRef(user);
+  userRef.current = user;
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const languageRef = useRef(language);
+  languageRef.current = language;
+  const saveProgressRef = useRef(saveProgressMutation);
+  saveProgressRef.current = saveProgressMutation;
+  const clearProgressRef = useRef(clearProgressMutation);
+  clearProgressRef.current = clearProgressMutation;
   
   const isLoggedIn = !!user || isTestLoggedIn;
   
@@ -116,6 +128,11 @@ export default function AssessmentPage() {
     assessmentMode,
   } = useAssessment();
 
+  // Ref guarantees the completion effect always reads the latest answers,
+  // regardless of React batching or closure timing.
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
+
   // Question type labels - multilingual
   const questionTypeLabels = {
     likert: { 
@@ -137,43 +154,55 @@ export default function AssessmentPage() {
 
   useEffect(() => {
     if (hasCheckedProgressRef.current || answers.length > 0) return;
+    if (isLoadingProgress) return;
     
-    if (!isLoadingProgress && user && savedProgress) {
+    if (user && savedProgress) {
       hasCheckedProgressRef.current = true;
       if (savedProgress.answers.length >= 3) {
         setShowResumeDialog(true);
       } else if (savedProgress.answers.length > 0) {
-        clearProgressMutation.mutate();
+        clearProgressRef.current.mutate();
       }
-    } else if (!isLoadingProgress && !user) {
+    } else {
+      // No progress found or not logged in — mark as checked
       hasCheckedProgressRef.current = true;
     }
-  }, [isLoadingProgress, savedProgress, user, answers.length, clearProgressMutation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoadingProgress, savedProgress, user, answers.length]);
 
   const handleResume = useCallback(() => {
     if (savedProgress) {
+      // If the saved progress already has all questions answered,
+      // don't restore into the assessment — navigate to results directly
+      if (savedProgress.answers.length >= totalQuestions) {
+        clearProgressRef.current.mutateAsync().catch(() => {});
+        navigateRef.current("/results");
+        setShowResumeDialog(false);
+        return;
+      }
       restoreProgress(
         savedProgress.answers,
-        savedProgress.current_index
+        savedProgress.current_index,
+        savedProgress.question_order
       );
     }
     setShowResumeDialog(false);
-  }, [savedProgress, restoreProgress]);
+  }, [savedProgress, restoreProgress, totalQuestions]);
 
   const handleStartNew = useCallback(async () => {
-    await clearProgressMutation.mutateAsync();
+    await clearProgressRef.current.mutateAsync();
     setShowResumeDialog(false);
-  }, [clearProgressMutation]);
+  }, []);
 
   useEffect(() => {
-    if (!user || answers.length === 0 || isComplete) return;
+    if (!userRef.current || answers.length === 0 || isComplete) return;
 
     const progressKey = `${currentIndex}-${answers.length}`;
     if (progressKey === lastSavedRef.current) return;
 
     const saveTimer = setTimeout(() => {
       const questionOrder = getQuestionOrder();
-      saveProgressMutation.mutate({
+      saveProgressRef.current.mutate({
         currentIndex,
         answers,
         questionOrder,
@@ -182,71 +211,73 @@ export default function AssessmentPage() {
     }, 2000);
 
     return () => clearTimeout(saveTimer);
-  }, [user, currentIndex, answers, isComplete, saveProgressMutation, getQuestionOrder]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, answers, isComplete]);
 
   useEffect(() => {
-    const handleComplete = async () => {
-      if (!isComplete || isSaving) return;
-      
-      setIsSaving(true);
+    if (!isComplete || isSavingRef.current) return;
+    isSavingRef.current = true;
+    setIsSaving(true);
+
+    const runCompletion = async () => {
+      const latestAnswers = answersRef.current;
       const results = calculateResults();
       const completionTimeSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
+      const currentUser = userRef.current;
+      const currentLanguage = languageRef.current;
 
       sessionStorage.setItem("assessmentResults", JSON.stringify(results));
 
-      if (user) {
+      if (currentUser) {
         try {
           const savedResult = await saveResultMutation.mutateAsync({
             result: results,
             questionCount: totalQuestions,
             completionTimeSeconds,
-            answers,
+            answers: latestAnswers,
           });
           sessionStorage.setItem("currentResultId", savedResult.id);
           
-          // Mark any pending assignment as completed
           try {
             await completeAssignmentMutation.mutateAsync(savedResult.id);
           } catch (assignmentError) {
-            // Non-critical: assignment update failure shouldn't block the flow
             console.warn("Assignment status update skipped:", assignmentError);
           }
           
-          await clearProgressMutation.mutateAsync();
-          
-          toast.success(language === "en" ? "Results saved to cloud" : language === "zh-TW" ? "測評結果已儲存到雲端" : "测评结果已保存到云端");
+          await clearProgressRef.current.mutateAsync();
+          // Clear pending CP transaction — assessment completed successfully
+          sessionStorage.removeItem("pending_cp_transaction_id");
+          toast.success(currentLanguage === "en" ? "Results saved to cloud" : currentLanguage === "zh-TW" ? "測評結果已儲存到雲端" : "测评结果已保存到云端");
         } catch (error) {
           console.error("Failed to save assessment result:", error);
-          toast.error(language === "en" ? "Failed to save results" : language === "zh-TW" ? "結果儲存失敗" : "结果保存失败");
+          toast.error(currentLanguage === "en" ? "Failed to save results" : currentLanguage === "zh-TW" ? "結果儲存失敗" : "结果保存失败");
         }
       }
 
-      // Navigate to ideal card test if combined assessment, otherwise to results
       const isCombinedAssessment = sessionStorage.getItem('scpc_combined_assessment') === 'true';
-      if (isCombinedAssessment) {
-        navigate("/ideal-card-test");
-      } else {
-        navigate("/results");
-      }
+      navigateRef.current(isCombinedAssessment ? "/ideal-card-test" : "/results");
     };
 
-    handleComplete();
-  }, [isComplete, isSaving, calculateResults, navigate, user, saveResultMutation, totalQuestions, clearProgressMutation, language]);
+    runCompletion();
+    // Only trigger when isComplete flips to true — all other values read via refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isComplete]);
 
   const handleSaveAndExit = useCallback(async () => {
-    if (user && answers.length > 0 && !isComplete) {
+    if (userRef.current && answers.length > 0 && !isComplete) {
       const questionOrder = getQuestionOrder();
-      await saveProgressMutation.mutateAsync({
+      await saveProgressRef.current.mutateAsync({
         currentIndex,
         answers,
         questionOrder,
       });
+      const currentLang = languageRef.current;
       toast.success(
-        language === "en" ? "Progress saved" : language === "zh-TW" ? "進度已儲存" : "进度已保存"
+        currentLang === "en" ? "Progress saved" : currentLang === "zh-TW" ? "進度已儲存" : "进度已保存"
       );
     }
-    navigate("/");
-  }, [user, answers, isComplete, currentIndex, getQuestionOrder, saveProgressMutation, language, navigate]);
+    navigateRef.current("/");
+  }, [answers, isComplete, currentIndex, getQuestionOrder]);
 
   // Listen for save-and-exit event from MainLayout header button
   useEffect(() => {
@@ -302,6 +333,32 @@ export default function AssessmentPage() {
             <Loader2 className="h-8 w-8 animate-spin" style={{ color: "hsl(75, 55%, 45%)" }} />
           </div>
           <p className="text-muted-foreground">{t("assessment.checkingProgress")}</p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Show completion/saving screen to prevent further interaction
+  if (isComplete || isSaving) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "hsl(75, 55%, 98%)" }}>
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center space-y-4"
+        >
+          <div 
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto"
+            style={{ backgroundColor: "hsl(75, 55%, 90%)" }}
+          >
+            <Loader2 className="h-8 w-8 animate-spin" style={{ color: "hsl(75, 55%, 45%)" }} />
+          </div>
+          <p className="text-lg font-medium" style={{ color: "hsl(228, 51%, 25%)" }}>
+            {language === "en" ? "Assessment Complete!" : language === "zh-TW" ? "測評完成！" : "测评完成！"}
+          </p>
+          <p className="text-muted-foreground">
+            {language === "en" ? "Saving your results..." : language === "zh-TW" ? "正在儲存您的結果..." : "正在保存您的结果..."}
+          </p>
         </motion.div>
       </div>
     );
@@ -425,23 +482,7 @@ export default function AssessmentPage() {
           {/* Question Area */}
           <div className="flex-1 flex items-center justify-center px-8 py-12">
             <div className="w-full max-w-2xl">
-              {/* Question Header */}
-              <motion.div 
-                key={`header-${currentIndex}`}
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-6 flex items-center justify-between"
-              >
-                <div 
-                  className="px-4 py-2 rounded-full text-sm font-semibold"
-                  style={{ backgroundColor: "hsl(228, 51%, 23%)", color: "white" }}
-                >
-                  {t("assessment.question")} {currentIndex + 1} {t("assessment.of")} {totalQuestions}
-                </div>
-                <div className="flex items-center gap-2" />
-              </motion.div>
-
-              {/* Question Card */}
+              {/* Question Card — header INSIDE AnimatePresence to prevent insertBefore race */}
               <AnimatePresence mode="wait">
                 <motion.div
                   key={currentIndex}
@@ -449,9 +490,22 @@ export default function AssessmentPage() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
-                  className="bg-white rounded-2xl shadow-lg border p-8 md:p-10 relative overflow-hidden"
-                  style={{ borderColor: "hsl(75, 55%, 85%)" }}
                 >
+                  {/* Question Header */}
+                  <div className="mb-6 flex items-center justify-between">
+                    <div 
+                      className="px-4 py-2 rounded-full text-sm font-semibold"
+                      style={{ backgroundColor: "hsl(228, 51%, 23%)", color: "white" }}
+                    >
+                      {t("assessment.question")} {currentIndex + 1} {t("assessment.of")} {totalQuestions}
+                    </div>
+                    <div className="flex items-center gap-2" />
+                  </div>
+
+                  <div
+                    className="bg-white rounded-2xl shadow-lg border p-8 md:p-10 relative overflow-hidden"
+                    style={{ borderColor: "hsl(75, 55%, 85%)" }}
+                  >
                   {/* Decorative accent */}
                   <div 
                     className="absolute top-0 left-0 w-full h-1 rounded-t-2xl"
@@ -508,6 +562,7 @@ export default function AssessmentPage() {
                       );
                     })}
                   </div>
+                  </div>
                 </motion.div>
               </AnimatePresence>
 
@@ -524,7 +579,7 @@ export default function AssessmentPage() {
                   )}
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  {language === "en" ? "Previous" : language === "zh-TW" ? "上一題" : "上一题"}
+                  {language === "en" ? "Previous" : language === "zh-TW" ? "上一步" : "上一步"}
                 </button>
 
                 <div className="w-1" /> {/* Spacer */}

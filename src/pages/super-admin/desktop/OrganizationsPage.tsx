@@ -4,7 +4,9 @@ import {
   Search, Plus, Building2,
   Edit, Trash2, X, Save,
   CheckCircle2, Clock, XCircle, Loader2, AlertTriangle, UserPlus,
+  ShieldCheck, ImageIcon, KeyRound,
 } from "lucide-react";
+import OrgVerificationCodes from "@/components/desktop/OrgVerificationCodes";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/hooks/useLanguage";
 import { toast } from "sonner";
@@ -15,9 +17,32 @@ import {
   useDeleteOrganization,
 } from "@/hooks/useAdminData";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 type ModalMode = "add" | "edit" | "delete" | null;
+
+const FEATURE_KEYS = [
+  { key: "career_anchor", labelEn: "Career Anchor", labelZhTw: "職業錨測評", labelZhCn: "职业锚测评" },
+  { key: "ideal_card", labelEn: "Espresso Card", labelZhTw: "理想人生卡", labelZhCn: "理想人生卡" },
+  { key: "combined", labelEn: "Integration Assessment", labelZhTw: "整合測評", labelZhCn: "整合测评" },
+  { key: "report_download", labelEn: "Report Download", labelZhTw: "報告下載", labelZhCn: "报告下载" },
+  { key: "analytics", labelEn: "Analytics", labelZhTw: "資料分析", labelZhCn: "数据分析" },
+  { key: "client_management", labelEn: "Client Management", labelZhTw: "客戶管理", labelZhCn: "客户管理" },
+  { key: "consultant_notes", labelEn: "Consultant Notes", labelZhTw: "諮詢筆記", labelZhCn: "咨询笔记" },
+  { key: "trend_analysis", labelEn: "Trend Analysis", labelZhTw: "趨勢分析", labelZhCn: "趋势分析" },
+  { key: "certification", labelEn: "Certification", labelZhTw: "認證管理", labelZhCn: "认证管理" },
+  { key: "cdu_records", labelEn: "CDU Records", labelZhTw: "CDU 記錄", labelZhCn: "CDU 记录" },
+  { key: "message", labelEn: "Messaging", labelZhTw: "訊息功能", labelZhCn: "消息功能" },
+  { key: "anonymous_assessment", labelEn: "Anonymous Assessment", labelZhTw: "匿名測評", labelZhCn: "匿名测评" },
+  { key: "cp_points", labelEn: "CP Points System", labelZhTw: "CP 點數系統", labelZhCn: "CP 点数系统" },
+] as const;
+
+const DEFAULT_FEATURE_PERMISSIONS: Record<string, boolean> = {
+  career_anchor: true, ideal_card: true, combined: true, report_download: true,
+  analytics: true, client_management: true, consultant_notes: true,
+  trend_analysis: true, certification: true, cdu_records: true, message: true,
+  anonymous_assessment: false, cp_points: true,
+};
 
 interface OrgFormData {
   id: string;
@@ -28,11 +53,17 @@ interface OrgFormData {
   status: string;
   adminEmail: string;
   adminName: string;
+  organizationTypeId: string;
+  featurePermissions: Record<string, boolean>;
+  logoUrl: string;
 }
 
 const initialFormData: OrgFormData = {
   id: "", name: "", domain: "", plan: "trial", maxSeats: "10", status: "active",
   adminEmail: "", adminName: "",
+  organizationTypeId: "",
+  featurePermissions: { ...DEFAULT_FEATURE_PERMISSIONS },
+  logoUrl: "",
 };
 
 export default function OrganizationsPage() {
@@ -43,11 +74,27 @@ export default function OrganizationsPage() {
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [formData, setFormData] = useState<OrgFormData>(initialFormData);
   const [isCreatingWithAdmin, setIsCreatingWithAdmin] = useState(false);
+  const [codesOrgId, setCodesOrgId] = useState<string | null>(null);
+  const [codesOrgName, setCodesOrgName] = useState("");
 
   const { data: organizations, isLoading } = useOrganizationsWithCounts();
   const createMutation = useCreateOrganization();
   const updateMutation = useUpdateOrganization();
   const deleteMutation = useDeleteOrganization();
+
+  const { data: orgTypesData } = useQuery({
+    queryKey: ["organization_types"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("organization_types")
+        .select("id, code, name_zh_cn, name_zh_tw, name_en, default_feature_permissions")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+  });
+  const orgTypes = orgTypesData || [];
 
   const plans = ["enterprise", "professional", "standard", "trial"];
   const planLabels: Record<string, string> = { enterprise: "Enterprise", professional: "Professional", standard: "Standard", trial: "Trial" };
@@ -73,10 +120,24 @@ export default function OrganizationsPage() {
   };
 
   const openEdit = (org: typeof orgs[0]) => {
+    const orgAny = org as Record<string, unknown>;
+    const rawPerms = (orgAny.feature_permissions as Record<string, boolean>) || {};
+    const hasNewPerms = Object.keys(rawPerms).length > 0;
+    const featurePermissions = hasNewPerms
+      ? { ...DEFAULT_FEATURE_PERMISSIONS, ...rawPerms }
+      : {
+          ...DEFAULT_FEATURE_PERMISSIONS,
+          career_anchor: orgAny.enable_career_anchor !== false,
+          ideal_card: orgAny.enable_ideal_card !== false,
+          combined: orgAny.enable_combined !== false,
+        };
     setFormData({
       id: org.id, name: org.name || "", domain: org.domain || "",
       plan: org.plan_type || "trial", maxSeats: String(org.max_seats || 10),
       status: org.status || "active", adminEmail: "", adminName: "",
+      organizationTypeId: (orgAny.organization_type_id as string) || "",
+      featurePermissions,
+      logoUrl: (orgAny.logo_url as string) || "",
     });
     setModalMode("edit");
   };
@@ -98,6 +159,9 @@ export default function OrganizationsPage() {
           domain: formData.domain,
           plan_type: formData.plan,
           max_seats: parseInt(formData.maxSeats) || 10,
+          organization_type_id: formData.organizationTypeId || undefined,
+          feature_permissions: formData.featurePermissions,
+          logo_url: formData.logoUrl,
         });
 
         // Step 2: Create org admin account if email is provided
@@ -148,6 +212,9 @@ export default function OrganizationsPage() {
         id: formData.id, name: formData.name, domain: formData.domain,
         plan_type: formData.plan, max_seats: parseInt(formData.maxSeats) || 10,
         status: formData.status,
+        organization_type_id: formData.organizationTypeId || null,
+        feature_permissions: formData.featurePermissions,
+        logo_url: formData.logoUrl,
       });
       toast.success(language === "en" ? "Organization updated" : language === "zh-TW" ? "機構更新成功" : "机构更新成功");
     }
@@ -177,32 +244,32 @@ export default function OrganizationsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground mb-1">{language === "en" ? "Organizations" : language === "zh-TW" ? "機構管理" : "机构管理"}</h1>
           <p className="text-sm text-muted-foreground">{language === "en" ? "Manage all tenant organizations" : language === "zh-TW" ? "管理所有租戶機構" : "管理所有租户机构"}</p>
         </div>
-        <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors">
+        <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors flex-shrink-0">
           <Plus className="w-4 h-4" /> {language === "en" ? "Add Organization" : language === "zh-TW" ? "新增機構" : "新增机构"}
         </button>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <div className="bg-card border border-border rounded-lg p-4"><div className="text-2xl font-bold text-foreground">{orgs.length}</div><div className="text-xs text-muted-foreground">{language === "en" ? "Total Organizations" : language === "zh-TW" ? "機構總數" : "机构总数"}</div></div>
         <div className="bg-card border border-border rounded-lg p-4"><div className="text-2xl font-bold text-green-600">{orgs.filter(o => o.status === "active").length}</div><div className="text-xs text-muted-foreground">{language === "en" ? "Active" : language === "zh-TW" ? "活躍" : "活跃"}</div></div>
         <div className="bg-card border border-border rounded-lg p-4"><div className="text-2xl font-bold text-foreground">{orgs.reduce((sum, o) => sum + (o.userCount || 0), 0).toLocaleString()}</div><div className="text-xs text-muted-foreground">{language === "en" ? "Total Users" : language === "zh-TW" ? "總用戶" : "总用户"}</div></div>
         <div className="bg-card border border-border rounded-lg p-4"><div className="text-2xl font-bold text-foreground">{orgs.filter(o => o.ssoEnabled).length}</div><div className="text-xs text-muted-foreground">{language === "en" ? "SSO Enabled" : language === "zh-TW" ? "SSO已啟用" : "SSO已启用"}</div></div>
       </div>
 
-      <div className="flex gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input type="text" placeholder={language === "en" ? "Search organizations..." : language === "zh-TW" ? "搜尋機構名稱或網域..." : "搜索机构名称或域名..."} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setSelectedPlan(null)} className={cn("px-3 py-2 rounded-lg text-sm font-medium transition-colors", !selectedPlan ? "bg-red-500 text-white" : "bg-card border border-border text-muted-foreground hover:text-foreground")}>{language === "en" ? "All" : "全部"}</button>
+        <div className="flex gap-2 overflow-x-auto flex-shrink-0 pb-0.5">
+          <button onClick={() => setSelectedPlan(null)} className={cn("px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap", !selectedPlan ? "bg-red-500 text-white" : "bg-card border border-border text-muted-foreground hover:text-foreground")}>{language === "en" ? "All" : "全部"}</button>
           {plans.map((plan) => (
-            <button key={plan} onClick={() => setSelectedPlan(plan)} className={cn("px-3 py-2 rounded-lg text-sm font-medium transition-colors", selectedPlan === plan ? "bg-red-500 text-white" : "bg-card border border-border text-muted-foreground hover:text-foreground")}>{planLabels[plan]}</button>
+            <button key={plan} onClick={() => setSelectedPlan(plan)} className={cn("px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap", selectedPlan === plan ? "bg-red-500 text-white" : "bg-card border border-border text-muted-foreground hover:text-foreground")}>{planLabels[plan]}</button>
           ))}
         </div>
       </div>
@@ -231,9 +298,20 @@ export default function OrganizationsPage() {
                 <tr key={org.id} className="hover:bg-muted/10 transition-colors">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center"><Building2 className="w-4 h-4 text-red-500" /></div>
+                      {(org as any).logo_url ? (
+                        <img src={(org as any).logo_url} alt="" className="w-9 h-9 rounded-lg object-contain bg-muted/20 border border-border" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center"><Building2 className="w-4 h-4 text-red-500" /></div>
+                      )}
                       <div>
-                        <div className="text-sm font-medium text-foreground">{org.name}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">{org.name}</span>
+                          {(org as any).is_system && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                              {language === "en" ? "System" : "系統"}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-muted-foreground">{org.domain || "—"}</div>
                       </div>
                     </div>
@@ -248,10 +326,23 @@ export default function OrganizationsPage() {
                   <td className="px-5 py-4"><span className={`text-xs ${org.ssoEnabled ? "text-green-600" : "text-muted-foreground"}`}>{org.ssoEnabled ? "✓ Enabled" : "—"}</span></td>
                   <td className="px-5 py-4"><span className={cn("flex items-center gap-1 text-xs font-medium", status.color)}><StatusIcon className="w-3.5 h-3.5" /> {status.label}</span></td>
                   <td className="px-5 py-4 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openEdit(org)} className="p-1.5 hover:bg-muted/20 rounded-lg" title={language === "en" ? "Edit" : language === "zh-TW" ? "編輯" : "编辑"}><Edit className="w-4 h-4 text-muted-foreground" /></button>
-                      <button onClick={() => openDelete(org)} className="p-1.5 hover:bg-destructive/10 rounded-lg" title={language === "en" ? "Delete" : language === "zh-TW" ? "刪除" : "删除"}><Trash2 className="w-4 h-4 text-destructive" /></button>
-                    </div>
+                    {(org as any).is_system ? (
+                      <span className="text-xs text-muted-foreground italic">
+                        {language === "en" ? "Protected" : language === "zh-TW" ? "受保護" : "受保护"}
+                      </span>
+                    ) : (
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => { setCodesOrgId(org.id); setCodesOrgName(org.name || ""); }}
+                          className="p-1.5 hover:bg-amber-50 rounded-lg"
+                          title={language === "en" ? "Verification Codes" : language === "zh-TW" ? "驗證碼" : "验证码"}
+                        >
+                          <KeyRound className="w-4 h-4 text-amber-600" />
+                        </button>
+                        <button onClick={() => openEdit(org)} className="p-1.5 hover:bg-muted/20 rounded-lg" title={language === "en" ? "Edit" : language === "zh-TW" ? "編輯" : "编辑"}><Edit className="w-4 h-4 text-muted-foreground" /></button>
+                        <button onClick={() => openDelete(org)} className="p-1.5 hover:bg-destructive/10 rounded-lg" title={language === "en" ? "Delete" : language === "zh-TW" ? "刪除" : "删除"}><Trash2 className="w-4 h-4 text-destructive" /></button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               );
@@ -274,6 +365,35 @@ export default function OrganizationsPage() {
                   <label className="block text-sm font-medium mb-1.5">{language === "en" ? "Name" : language === "zh-TW" ? "機構名稱" : "机构名称"} *</label>
                   <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20" />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">
+                    <span className="flex items-center gap-1.5">
+                      <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                      {language === "en" ? "Logo URL" : language === "zh-TW" ? "機構 Logo 網址" : "机构 Logo 网址"}
+                    </span>
+                  </label>
+                  <div className="flex gap-3 items-start">
+                    <input
+                      type="url"
+                      value={formData.logoUrl}
+                      onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
+                      placeholder="https://example.com/logo.png"
+                      className="flex-1 px-3 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                    />
+                    {formData.logoUrl && (
+                      <img
+                        src={formData.logoUrl}
+                        alt="Preview"
+                        className="w-10 h-10 rounded-lg object-contain border border-border bg-muted/20 flex-shrink-0"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        onLoad={(e) => { (e.target as HTMLImageElement).style.display = 'block'; }}
+                      />
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {language === "en" ? "Enter logo image URL. Will display in dashboards." : language === "zh-TW" ? "輸入 Logo 圖片網址，將顯示在儀表板中。" : "输入 Logo 图片网址，将显示在仪表板中。"}
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1.5">{language === "en" ? "Plan" : language === "zh-TW" ? "方案" : "套餐"}</label>
@@ -294,6 +414,86 @@ export default function OrganizationsPage() {
                     </select>
                   </div>
                 )}
+
+                {/* Organization Type & Feature Permissions */}
+                <div className="border-t border-border pt-4 mt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ShieldCheck className="w-4 h-4 text-red-500" />
+                    <span className="text-sm font-semibold text-foreground">
+                      {language === "en" ? "Type & Permissions" : language === "zh-TW" ? "類型與權限" : "类型与权限"}
+                    </span>
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1.5">
+                      {language === "en" ? "Organization Type" : language === "zh-TW" ? "機構類型" : "机构类型"}
+                    </label>
+                    <select
+                      value={formData.organizationTypeId}
+                      onChange={(e) => {
+                        const typeId = e.target.value;
+                        const selectedType = orgTypes.find((orgType) => orgType.id === typeId);
+                        const defaultPerms = (selectedType?.default_feature_permissions as Record<string, boolean>) || {};
+                        setFormData({
+                          ...formData,
+                          organizationTypeId: typeId,
+                          featurePermissions: typeId
+                            ? { ...DEFAULT_FEATURE_PERMISSIONS, ...defaultPerms }
+                            : formData.featurePermissions,
+                        });
+                      }}
+                      className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm"
+                    >
+                      <option value="">{language === "en" ? "Select type..." : language === "zh-TW" ? "選擇類型..." : "选择类型..."}</option>
+                      {orgTypes.map((orgType) => (
+                        <option key={orgType.id} value={orgType.id}>
+                          {language === "en" ? orgType.name_en : language === "zh-TW" ? orgType.name_zh_tw : orgType.name_zh_cn}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    {language === "en"
+                      ? "Control which features are available to all members of this organization"
+                      : language === "zh-TW"
+                      ? "控制該機構所有成員可使用的功能"
+                      : "控制该机构所有成员可使用的功能"}
+                  </p>
+                  <div className="space-y-1.5">
+                    {FEATURE_KEYS.map((featureKey) => (
+                      <label
+                        key={featureKey.key}
+                        className="flex items-center justify-between px-3 py-2 rounded-lg border border-border hover:bg-muted/10 transition-colors cursor-pointer"
+                      >
+                        <span className="text-sm text-foreground">
+                          {language === "en" ? featureKey.labelEn : language === "zh-TW" ? featureKey.labelZhTw : featureKey.labelZhCn}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData({
+                              ...formData,
+                              featurePermissions: {
+                                ...formData.featurePermissions,
+                                [featureKey.key]: !formData.featurePermissions[featureKey.key],
+                              },
+                            })
+                          }
+                          className={cn(
+                            "relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0",
+                            formData.featurePermissions[featureKey.key] ? "bg-green-500" : "bg-muted"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm",
+                              formData.featurePermissions[featureKey.key] ? "translate-x-[18px]" : "translate-x-[3px]"
+                            )}
+                          />
+                        </button>
+                      </label>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Admin Account Section — only on Add */}
                 {modalMode === "add" && (
@@ -369,6 +569,14 @@ export default function OrganizationsPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Verification Codes Modal */}
+      <OrgVerificationCodes
+        organizationId={codesOrgId || ""}
+        organizationName={codesOrgName}
+        isOpen={!!codesOrgId}
+        onClose={() => setCodesOrgId(null)}
+      />
     </div>
   );
 }

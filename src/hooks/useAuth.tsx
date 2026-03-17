@@ -8,6 +8,7 @@ import {
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+import { logLoginEvent, logLogoutEvent } from "@/lib/auditLogger";
 
 interface Profile {
   id: string;
@@ -21,6 +22,7 @@ interface Profile {
   phone: string | null;
   status: string;
   career_stage: string | null;
+  work_experience_years: number | null;
   role: string | null;
   additional_roles: Array<{ role_type: string; organization_id?: string | null; department_id?: string | null; organization_name?: string | null }> | null;
 }
@@ -48,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, email, full_name, avatar_url, role_type, organization_id, department_id, consultant_id, phone, status, career_stage, role, additional_roles")
+      .select("id, email, full_name, avatar_url, role_type, organization_id, department_id, consultant_id, phone, status, career_stage, work_experience_years, role, additional_roles")
       .eq("id", userId)
       .single();
     
@@ -85,6 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTimeout(() => {
             fetchProfile(currentSession.user.id);
           }, 0);
+
+          if (event === "SIGNED_IN") {
+            logLoginEvent(
+              currentSession.user.email || "unknown",
+              currentSession.user.id
+            );
+          }
         } else {
           setProfile(null);
         }
@@ -130,6 +139,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    if (user) {
+      logLogoutEvent(user.email || "unknown", user.id);
+    }
     await supabase.auth.signOut();
     setProfile(null);
     // Clear persisted test auth to prevent stale role display after logout

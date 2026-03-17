@@ -18,14 +18,20 @@ import {
   Activity,
   Compass,
   Brain,
+  Download,
 } from "lucide-react";
 import { DIMENSIONS, type AssessmentResult } from "@/hooks/useAssessment";
 import { DIMENSION_NAMES } from "@/data/questions";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { resolveUserDisplayName } from "@/lib/utils";
 import { useTranslation } from "@/hooks/useLanguage";
 import { useTestAuth, getWorkExperienceDescription, type LanguageKey } from "@/hooks/useTestAuth";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { downloadLatestV3Report } from "@/lib/reportV3Download";
+import type { LangKey } from "@/lib/reportDataFetcher";
+import { getCareerStageLabel } from "@/lib/reportConstants";
 
 // New 6-section Developmental Career Architecture Analysis
 interface AIDeepDiveAnalysis {
@@ -90,7 +96,7 @@ interface AIDeepDiveAnalysis {
 }
 
 export default function DeepDivePage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { language } = useTranslation();
   const prefersReducedMotion = useReducedMotion();
 
@@ -110,14 +116,14 @@ export default function DeepDivePage() {
   const texts = {
     "zh-CN": {
       title: "深度解读",
-      subtitle: "AI 帮你真正理解自己的职业锚",
+      subtitle: "SCPC 专家帮你真正理解自己的职业锚",
       loading: "正在生成个性化分析...",
-      generateButton: "生成 AI 深度解读",
+      generateButton: "生成深度解读",
       refreshButton: "重新生成",
       errorText: "AI 分析暂时不可用，请稍后重试",
       loginHint: "登录后可获得 AI 个性化分析",
       stageSection: "你的职业阶段",
-      primaryAnchor: "你的高敏感锚",
+      primaryAnchor: "你的核心优势锚点",
       behavioralSection: "行为特征",
       tensionSection: "张力与风险信号",
       imbalanceSection: "失衡模式",
@@ -142,14 +148,14 @@ export default function DeepDivePage() {
     },
     "zh-TW": {
       title: "深度解讀",
-      subtitle: "AI 幫你真正理解自己的職業錨",
+      subtitle: "SCPC 專家幫你真正理解自己的職業錨",
       loading: "正在生成個性化分析...",
-      generateButton: "生成 AI 深度解讀",
+      generateButton: "生成深度解讀",
       refreshButton: "重新生成",
       errorText: "AI 分析暫時不可用，請稍後重試",
       loginHint: "登入後可獲得 AI 個性化分析",
       stageSection: "你的職業階段",
-      primaryAnchor: "你的高敏感錨",
+      primaryAnchor: "你的核心優勢錨點",
       behavioralSection: "行為特徵",
       tensionSection: "張力與風險信號",
       imbalanceSection: "失衡模式",
@@ -174,14 +180,14 @@ export default function DeepDivePage() {
     },
     "en": {
       title: "Deep Dive",
-      subtitle: "AI helps you truly understand your career anchors",
+      subtitle: "SCPC experts help you truly understand your career anchors",
       loading: "Generating personalized analysis...",
-      generateButton: "Generate AI Deep Dive",
+      generateButton: "Generate Deep Dive",
       refreshButton: "Regenerate",
       errorText: "AI analysis temporarily unavailable. Please try again later.",
       loginHint: "Log in to get AI personalized analysis",
       stageSection: "Your Career Stage",
-      primaryAnchor: "Your High-Sensitivity Anchor",
+      primaryAnchor: "Your Core Advantage Anchor",
       behavioralSection: "Behavioral Patterns",
       tensionSection: "Tension & Risk Signals",
       imbalanceSection: "Imbalance Patterns",
@@ -219,19 +225,19 @@ export default function DeepDivePage() {
           EC: 68, SV: 55, CH: 70, LS: 48,
         },
         mainAnchor: "TF",
-        highSensitivityAnchors: ["TF"],
+        coreAdvantageAnchors: ["TF"],
         conflictAnchors: [["AU", "SE"]],
         salienceQuestionIds: ["Q001", "Q003", "Q021", "Q041", "Q061"],
         stability: "mature",
         interpretation: {
-          TF: { level: "nonNegotiable", label: "不可妥协的长期约束", score: 82 },
-          GM: { level: "conditional", label: "条件性约束", score: 45 },
+          TF: { level: "coreAdvantage", label: "核心优势锚点", score: 82 },
+          GM: { level: "moderate", label: "中度影响", score: 45 },
           AU: { level: "highSensitive", label: "高敏感约束", score: 75 },
           SE: { level: "nonCore", label: "非核心维度", score: 35 },
           EC: { level: "highSensitive", label: "高敏感约束", score: 68 },
-          SV: { level: "conditional", label: "条件性约束", score: 55 },
+          SV: { level: "moderate", label: "中度影响", score: 55 },
           CH: { level: "highSensitive", label: "高敏感约束", score: 70 },
-          LS: { level: "conditional", label: "条件性约束", score: 48 },
+          LS: { level: "moderate", label: "中度影响", score: 48 },
         },
       });
     }
@@ -243,6 +249,14 @@ export default function DeepDivePage() {
     }
   }, [results, user]);
 
+  const deriveCareerStage = (workYearsValue: number | null, isExec: boolean, isEntrep: boolean): string => {
+    if (isExec || isEntrep) return "executive";
+    if (workYearsValue === null) return "mid";
+    if (workYearsValue <= 5) return "entry";
+    if (workYearsValue <= 10) return "mid";
+    return "senior";
+  };
+
   const fetchAIAnalysis = async () => {
     if (!results) return;
 
@@ -252,6 +266,45 @@ export default function DeepDivePage() {
     try {
       const { workYears, isExecutive, isEntrepreneur } = useTestAuth.getState();
       const workExpDesc = getWorkExperienceDescription(workYears, isExecutive, isEntrepreneur, language as LanguageKey);
+
+      // --- Priority 1: Try report generator expert text ---
+      const stageKey = deriveCareerStage(workYears, isExecutive, isEntrepreneur);
+      let reportGeneratorText: string | null = null;
+
+      try {
+        const { fetchActiveReportVersion } = await import("@/lib/reportDataFetcher");
+        const boundVersionId = await fetchActiveReportVersion(
+          "CAREER_ANCHOR",
+          user?.id || null,
+          profile?.organization_id || null,
+        );
+
+        if (boundVersionId) {
+          const mainScore = results.scores[displayAnchor] || 0;
+
+          const { data: textBlocks } = await supabase
+            .from("anchor_text_blocks")
+            .select("original_text_block")
+            .eq("version_id", boundVersionId)
+            .eq("anchor_type", displayAnchor)
+            .eq("section_type", "career_advice")
+            .eq("career_stage", stageKey)
+            .eq("language", language)
+            .lte("score_min", mainScore)
+            .gte("score_max", mainScore)
+            .limit(1);
+
+          if (textBlocks && textBlocks.length > 0 && textBlocks[0].original_text_block) {
+            reportGeneratorText = textBlocks[0].original_text_block;
+          }
+        }
+      } catch (reportErr) {
+        // Silently fall through to AI generation
+        console.warn("Report generator text lookup failed, falling back to AI:", reportErr);
+      }
+
+      // If expert text found, use it for primary anchor interpretation and still call AI for other sections
+      // We call AI regardless to get all 6 sections, but override coreMeaning with expert text
       const { data, error } = await supabase.functions.invoke("personalized-analysis", {
         body: {
           result: results,
@@ -267,7 +320,21 @@ export default function DeepDivePage() {
       if (error) throw error;
 
       if (data?.analysis) {
-        setAiAnalysis(data.analysis);
+        const analysis = data.analysis;
+
+        // Override primary anchor coreMeaning with expert text if available
+        if (reportGeneratorText && analysis.primaryAnchorInterpretation) {
+          analysis.primaryAnchorInterpretation.coreMeaning = reportGeneratorText;
+        } else if (reportGeneratorText && !analysis.primaryAnchorInterpretation) {
+          analysis.primaryAnchorInterpretation = {
+            coreMeaning: reportGeneratorText,
+            stageContext: "",
+            ifAligned: "",
+            ifMisaligned: "",
+          };
+        }
+
+        setAiAnalysis(analysis);
         setHasLoadedOnce(true);
       }
     } catch (error) {
@@ -278,13 +345,48 @@ export default function DeepDivePage() {
     }
   };
 
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownloadReport = async () => {
+    if (!user) {
+      toast.error(isEn ? "Please log in first" : isTW ? "請先登入" : "请先登录");
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      const { workYears: currentWorkYears, isExecutive, isEntrepreneur } = useTestAuth.getState();
+      const stageKey = deriveCareerStage(currentWorkYears, isExecutive, isEntrepreneur);
+
+      const reportOutput = await downloadLatestV3Report(
+        user.id,
+        resolveUserDisplayName(profile, user, language),
+        stageKey,
+        currentWorkYears,
+        language as LangKey,
+      );
+
+      if (!reportOutput) {
+        toast.error(isEn ? "No assessment data found" : isTW ? "未找到測評數據" : "未找到测评数据");
+        return;
+      }
+
+      toast.success(isEn ? "Report downloaded" : isTW ? "報告已下載" : "报告已下载");
+    } catch (downloadError) {
+      console.error("Download error:", downloadError);
+      toast.error(isEn ? "Download failed" : isTW ? "下載失敗" : "下载失败");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   if (!results) return null;
 
-  // Use high-sensitivity anchors if available, otherwise fallback to mainAnchor
-  const highSensAnchors = results.highSensitivityAnchors?.length
-    ? results.highSensitivityAnchors
-    : (results.scores ? Object.entries(results.scores).filter(([, s]) => s > 80).sort(([, a], [, b]) => b - a).map(([d]) => d) : []);
-  const displayAnchor = highSensAnchors[0] || results.mainAnchor || "TF";
+  // Use core advantage anchors if available, otherwise fallback to mainAnchor
+  const coreAdvAnchors = results.coreAdvantageAnchors?.length
+    ? results.coreAdvantageAnchors
+    : (results.scores ? Object.entries(results.scores).filter(([, s]) => s >= 80).sort(([, a], [, b]) => b - a).map(([d]) => d) : []);
+  const displayAnchor = coreAdvAnchors[0] || results.mainAnchor || "TF";
   const mainAnchorName = getDimensionName(displayAnchor);
 
   // Detect if response is new 6-section format or legacy
@@ -727,20 +829,32 @@ export default function DeepDivePage() {
                 </motion.div>
               )}
 
-              {/* Refresh + Action Plan */}
+              {/* Refresh + Download + Action Plan */}
               <motion.div
                 className="flex flex-col sm:flex-row items-center justify-between pt-4 gap-4"
                 variants={prefersReducedMotion ? undefined : itemVariants}
               >
-                <Button
-                  variant="outline"
-                  onClick={fetchAIAnalysis}
-                  disabled={isLoadingAI}
-                  className="gap-2"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  {txt.refreshButton}
-                </Button>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={fetchAIAnalysis}
+                    disabled={isLoadingAI}
+                    className="gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    {txt.refreshButton}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadReport}
+                    disabled={!aiAnalysis || isLoadingAI || isDownloading}
+                    className="gap-2"
+                  >
+                    {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    {isEn ? "Download" : isTW ? "下載報告" : "下载报告"}
+                  </Button>
+                </div>
 
                 <Link
                   to="/action-plan"
@@ -869,15 +983,27 @@ export default function DeepDivePage() {
                 className="flex flex-col sm:flex-row items-center justify-between pt-4 gap-4"
                 variants={prefersReducedMotion ? undefined : itemVariants}
               >
-                <Button
-                  variant="outline"
-                  onClick={fetchAIAnalysis}
-                  disabled={isLoadingAI}
-                  className="gap-2"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  {txt.refreshButton}
-                </Button>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={fetchAIAnalysis}
+                    disabled={isLoadingAI}
+                    className="gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    {txt.refreshButton}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadReport}
+                    disabled={!aiAnalysis || isLoadingAI || isDownloading}
+                    className="gap-2"
+                  >
+                    {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    {isEn ? "Download" : isTW ? "下載報告" : "下载报告"}
+                  </Button>
+                </div>
                 <Link
                   to="/action-plan"
                   className="inline-flex items-center gap-3 px-6 py-3 bg-primary text-primary-foreground font-medium rounded-sm hover:bg-primary/90 transition-colors group"

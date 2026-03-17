@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { 
   ChevronDown,
   ChevronUp,
-  Download,
   Loader2,
   Search,
   Filter,
@@ -19,7 +18,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { StoredAssessmentResult, StoredAnswer } from "@/hooks/useAssessmentResults";
 import { DIMENSIONS } from "@/hooks/useAssessment";
-import { downloadReport, storedResultToReportData, downloadComprehensiveReport } from "@/lib/exportReport";
+
+import { downloadV3ReportAsPdf, assessmentResultToV3Params } from "@/lib/reportV3Download";
+import type { LangKey } from "@/lib/reportDataFetcher";
 import AnswerDetailSection from "@/components/desktop/AnswerDetailSection";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -52,7 +53,7 @@ export default function AdminAssessmentsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterAnchor, setFilterAnchor] = useState<string>("");
-  const [exportingId, setExportingId] = useState<string | null>(null);
+  
 
   // Fetch all assessment results, then enrich with user profiles separately
   const { data: assessments, isLoading } = useQuery({
@@ -104,27 +105,22 @@ export default function AdminAssessmentsPage() {
     return matchesSearch && matchesAnchor;
   }) || [];
 
-  const handleExportSingle = async (assessment: StoredAssessmentResult & { user_name?: string }) => {
-    setExportingId(assessment.id);
-    try {
-      const reportData = storedResultToReportData(assessment, assessment.user_name);
-      await downloadReport(reportData, language, `assessment-${assessment.id.slice(0, 8)}.pdf`);
-      toast.success(isEn ? "Report exported" : "报告已导出");
-    } catch (error) {
-      console.error("Export failed:", error);
-      toast.error(isEn ? "Export failed" : "导出失败");
-    } finally {
-      setExportingId(null);
-    }
-  };
+
 
   const [comprehensiveExportId, setComprehensiveExportId] = useState<string | null>(null);
 
   const handleExportComprehensive = async (assessment: StoredAssessmentResult & { user_name?: string; career_stage?: string }) => {
     setComprehensiveExportId(assessment.id);
     try {
-      await downloadComprehensiveReport(assessment, language, assessment.user_name, assessment.career_stage);
-      toast.success(isEn ? "Comprehensive report exported" : "完整版报告已导出");
+      const v3Params = assessmentResultToV3Params(
+        assessment,
+        assessment.user_name || "",
+        assessment.career_stage || "mid",
+        null,
+        language as LangKey,
+      );
+      await downloadV3ReportAsPdf(v3Params);
+      toast.success(isEn ? "SCPC report exported" : "完整版报告已导出");
     } catch (error) {
       console.error("Comprehensive export failed:", error);
       toast.error(isEn ? "Export failed" : "导出失败");
@@ -271,21 +267,7 @@ export default function AdminAssessmentsPage() {
                           )}
                           {isEn ? "Full Report" : "完整报告"}
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleExportSingle(assessment);
-                          }}
-                          disabled={exportingId === assessment.id}
-                          className="p-2 hover:bg-muted/20 rounded-lg transition-colors"
-                          title={isEn ? "Export Summary" : "导出简要报告"}
-                        >
-                          {exportingId === assessment.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                          ) : (
-                            <Download className="w-4 h-4 text-muted-foreground" />
-                          )}
-                        </button>
+
                         {expandedId === assessment.id ? (
                           <ChevronUp className="w-5 h-5 text-muted-foreground" />
                         ) : (
@@ -333,7 +315,7 @@ export default function AdminAssessmentsPage() {
                         </div>
                         <div>
                           <div className="text-sm text-muted-foreground mb-1">
-                            {isEn ? "Risk Index" : "风险指数"}
+                            {isEn ? "Clarity Index" : "锚定清晰度"}
                           </div>
                           <div className={cn(
                             "text-lg font-semibold",

@@ -30,7 +30,7 @@ export default function MyReportsPage() {
     assessment: txt("Assessment Report", "測評報告", "测评报告"),
     comprehensive: txt("Comprehensive Report", "綜合報告", "综合报告"),
     trend: txt("Trend Report", "趨勢報告", "趋势报告"),
-    ideal_card: txt("Ideal Card Report", "理想卡報告", "理想卡报告"),
+    ideal_card: txt("Espresso Card Report", "理想卡報告", "理想卡报告"),
   };
 
   const filteredReports = reports.filter((report) => {
@@ -72,7 +72,7 @@ export default function MyReportsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
         {[
           { label: txt("Total Reports", "報告總數", "报告总数"), value: reports.length, icon: FileText, color: "text-blue-600", bg: "bg-blue-50" },
           { label: txt("Assessments", "測評報告", "测评报告"), value: reports.filter((r) => r.report_type === "assessment").length, icon: Target, color: "text-emerald-600", bg: "bg-emerald-50" },
@@ -163,7 +163,7 @@ export default function MyReportsPage() {
                 <h3 className="font-semibold text-foreground text-sm mb-1 truncate">{report.title}</h3>
                 <p className="text-xs text-muted-foreground mb-3">
                   {new Date(report.created_at).toLocaleDateString(language === "en" ? "en-US" : language === "zh-TW" ? "zh-TW" : "zh-CN", { year: "numeric", month: "short", day: "numeric" })}
-                  {mainAnchor && ` · ${txt("Anchor:", "高敏感錨:", "高敏感锚:")} ${mainAnchor}`}
+                  {mainAnchor && ` · ${txt("Anchor:", "核心錨:", "核心锚:")} ${mainAnchor}`}
                 </p>
                 <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button

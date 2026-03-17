@@ -49,12 +49,12 @@ const TXT: Record<string, Record<LangKey, string>> = {
   pageTitle: { en: "CP Rules Engine", "zh-TW": "CP 規則引擎", "zh-CN": "CP 规则引擎" },
   pageDesc: {
     en: "Configure deduction order, referral rewards, and recharge bonuses with versioned rule management",
-    "zh-TW": "配置扣點順序、推薦獎勵、充值贈送規則，支持版本化管理",
+    "zh-TW": "配置扣點順序、推薦獎勵、儲值贈送規則，支持版本化管理",
     "zh-CN": "配置扣点顺序、推荐奖励、充值赠送规则，支持版本化管理",
   },
   tabDeduction: { en: "Deduction Order", "zh-TW": "扣點順序", "zh-CN": "扣点顺序" },
   tabReferral: { en: "Referral Rewards", "zh-TW": "推薦獎勵", "zh-CN": "推荐奖励" },
-  tabBonus: { en: "Recharge Bonus", "zh-TW": "充值贈送", "zh-CN": "充值赠送" },
+  tabBonus: { en: "Recharge Bonus", "zh-TW": "儲值贈送", "zh-CN": "充值赠送" },
   // Deduction Order
   currentOrder: { en: "Current Deduction Order", "zh-TW": "當前扣點順序", "zh-CN": "当前扣点顺序" },
   deductionDesc: {
@@ -62,11 +62,11 @@ const TXT: Record<string, Record<LangKey, string>> = {
     "zh-TW": "調整順序後，系統將按此順序扣點。用戶消費 CP 時，依序從各帳本扣除。",
     "zh-CN": "调整顺序后，系统将按此顺序扣点。用户消费 CP 时，依序从各账本扣除。",
   },
-  paidCp: { en: "Paid CP", "zh-TW": "充值購買 CP", "zh-CN": "充值购买 CP" },
-  bonusCp: { en: "Recharge Bonus CP", "zh-TW": "充值贈送 CP", "zh-CN": "充值赠送 CP" },
+  paidCp: { en: "Paid CP", "zh-TW": "儲值購買 CP", "zh-CN": "充值购买 CP" },
+  bonusCp: { en: "Recharge Bonus CP", "zh-TW": "儲值贈送 CP", "zh-CN": "充值赠送 CP" },
   activityCp: { en: "Activity Reward CP", "zh-TW": "活動獎勵 CP", "zh-CN": "活动奖励 CP" },
   paidCpDesc: { en: "Purchased with real currency, refundable", "zh-TW": "用戶以真實貨幣購買，可退費", "zh-CN": "用户以真实货币购买，可退费" },
-  bonusCpDesc: { en: "Bonus from recharges, non-refundable", "zh-TW": "充值時贈送，不可退費", "zh-CN": "充值时赠送，不可退费" },
+  bonusCpDesc: { en: "Bonus from recharges, non-refundable", "zh-TW": "儲值時贈送，不可退費", "zh-CN": "充值时赠送，不可退费" },
   activityCpDesc: { en: "From activities/referrals, non-refundable", "zh-TW": "活動/推薦獲得，不可退費", "zh-CN": "活动/推荐获得，不可退费" },
   expireFirst: { en: "Expire-first-deduct-first within same category", "zh-TW": "同類先過期先扣", "zh-CN": "同类先过期先扣" },
   expireFirstDesc: {
@@ -77,7 +77,7 @@ const TXT: Record<string, Record<LangKey, string>> = {
   // Referral Reward
   triggerEvents: { en: "Trigger Events", "zh-TW": "觸發事件", "zh-CN": "触发事件" },
   evtRegister: { en: "Referral Registration", "zh-TW": "推薦註冊", "zh-CN": "推荐注册" },
-  evtFirstRecharge: { en: "First Recharge", "zh-TW": "首筆充值", "zh-CN": "首笔充值" },
+  evtFirstRecharge: { en: "First Recharge", "zh-TW": "首筆儲值", "zh-CN": "首笔充值" },
   evtFirstConsumption: { en: "First Consumption", "zh-TW": "首次消費", "zh-CN": "首次消费" },
   evtCompleteAssessment: { en: "Complete Assessment", "zh-TW": "完成測評", "zh-CN": "完成测评" },
   recipients: { en: "Reward Recipients", "zh-TW": "獎勵對象", "zh-CN": "奖励对象" },
@@ -87,13 +87,13 @@ const TXT: Record<string, Record<LangKey, string>> = {
   rewardAmount: { en: "Reward Amount (CP)", "zh-TW": "獎勵數量（CP）", "zh-CN": "奖励数量（CP）" },
   rewardMode: { en: "Reward Mode", "zh-TW": "獎勵模式", "zh-CN": "奖励模式" },
   modeFixed: { en: "Fixed amount", "zh-TW": "固定數量", "zh-CN": "固定数量" },
-  modePercent: { en: "Percentage of recharge", "zh-TW": "按充值比例", "zh-CN": "按充值比例" },
+  modePercent: { en: "Percentage of recharge", "zh-TW": "按儲值比例", "zh-CN": "按充值比例" },
   percentValue: { en: "Percentage (%)", "zh-TW": "比例（%）", "zh-CN": "比例（%）" },
   // Conditions
   conditions: { en: "Conditions", "zh-TW": "發放條件", "zh-CN": "发放条件" },
   condVerified: { en: "Identity verified", "zh-TW": "實名驗證", "zh-CN": "实名验证" },
   condEmailVerified: { en: "Email verified", "zh-TW": "郵箱驗證", "zh-CN": "邮箱验证" },
-  condMinRecharge: { en: "Min recharge threshold", "zh-TW": "最低充值門檻", "zh-CN": "最低充值门槛" },
+  condMinRecharge: { en: "Min recharge threshold", "zh-TW": "最低儲值門檻", "zh-CN": "最低充值门槛" },
   // Anti-fraud
   antiFraud: { en: "Anti-Fraud Limits", "zh-TW": "反作弊限制", "zh-CN": "反作弊限制" },
   dailyLimit: { en: "Daily limit per user", "zh-TW": "每人每日上限", "zh-CN": "每人每日上限" },
@@ -106,13 +106,13 @@ const TXT: Record<string, Record<LangKey, string>> = {
   approvalAuto: { en: "Auto-grant", "zh-TW": "自動發放", "zh-CN": "自动发放" },
   approvalManual: { en: "Manual review", "zh-TW": "人工審核", "zh-CN": "人工审核" },
   // Recharge Bonus
-  bonusConfig: { en: "Bonus CP per Package", "zh-TW": "各充值包贈送 CP", "zh-CN": "各充值包赠送 CP" },
+  bonusConfig: { en: "Bonus CP per Package", "zh-TW": "各儲值包贈送 CP", "zh-CN": "各充值包赠送 CP" },
   bonusConfigDesc: {
     en: "Set bonus CP for each recharge package. Leave 0 for no bonus.",
-    "zh-TW": "為每個充值包設定贈送 CP 數量。設為 0 表示不贈送。",
+    "zh-TW": "為每個儲值包設定贈送 CP 數量。設為 0 表示不贈送。",
     "zh-CN": "为每个充值包设定赠送 CP 数量。设为 0 表示不赠送。",
   },
-  packageName: { en: "Package", "zh-TW": "充值包", "zh-CN": "充值包" },
+  packageName: { en: "Package", "zh-TW": "儲值包", "zh-CN": "充值包" },
   price: { en: "Price", "zh-TW": "價格", "zh-CN": "价格" },
   baseCp: { en: "Base CP", "zh-TW": "基礎 CP", "zh-CN": "基础 CP" },
   bonusAmount: { en: "Bonus CP", "zh-TW": "贈送 CP", "zh-CN": "赠送 CP" },
@@ -120,7 +120,7 @@ const TXT: Record<string, Record<LangKey, string>> = {
   activityPeriod: { en: "Activity Period", "zh-TW": "活動期", "zh-CN": "活动期" },
   startDate: { en: "Start Date", "zh-TW": "開始日期", "zh-CN": "开始日期" },
   endDate: { en: "End Date", "zh-TW": "結束日期", "zh-CN": "结束日期" },
-  noPackages: { en: "No active recharge packages", "zh-TW": "暫無啟用的充值包", "zh-CN": "暂无启用的充值包" },
+  noPackages: { en: "No active recharge packages", "zh-TW": "暫無啟用的儲值包", "zh-CN": "暂无启用的充值包" },
   // Common
   save: { en: "Save as New Version", "zh-TW": "儲存為新版本", "zh-CN": "保存为新版本" },
   cancel: { en: "Cancel", "zh-TW": "取消", "zh-CN": "取消" },
@@ -158,8 +158,8 @@ const CP_TYPES = [
 
 function cpTypeName(code: string, langKey: LangKey): string {
   const map: Record<string, Record<LangKey, string>> = {
-    paid: { en: "Paid CP", "zh-TW": "充值購買 CP", "zh-CN": "充值购买 CP" },
-    bonus: { en: "Recharge Bonus CP", "zh-TW": "充值贈送 CP", "zh-CN": "充值赠送 CP" },
+    paid: { en: "Paid CP", "zh-TW": "儲值購買 CP", "zh-CN": "充值购买 CP" },
+    bonus: { en: "Recharge Bonus CP", "zh-TW": "儲值贈送 CP", "zh-CN": "充值赠送 CP" },
     activity: { en: "Activity Reward CP", "zh-TW": "活動獎勵 CP", "zh-CN": "活动奖励 CP" },
   };
   return map[code]?.[langKey] ?? code;

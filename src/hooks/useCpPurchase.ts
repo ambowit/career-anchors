@@ -55,7 +55,11 @@ export function useCpPurchase() {
 
       return data as PurchaseResult;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Store pending transaction for auto-refund if assessment is abandoned
+      if (data?.transaction_id) {
+        sessionStorage.setItem("pending_cp_transaction_id", data.transaction_id);
+      }
       queryClient.invalidateQueries({ queryKey: ["cp-wallet"] });
       queryClient.invalidateQueries({ queryKey: ["cp-transactions"] });
       setShowPurchaseModal(false);

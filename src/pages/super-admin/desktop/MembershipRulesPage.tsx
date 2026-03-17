@@ -66,10 +66,10 @@ interface RechargePackage {
 // ─── Labels ───────────────────────────────────────
 const TXT: Record<string, Record<LangKey, string>> = {
   pageTitle: { en: "Membership Rules Engine", "zh-TW": "會員規則引擎", "zh-CN": "会员规则引擎" },
-  pageDesc: { en: "Manage membership tiers, system rules, and recharge packages", "zh-TW": "管理會員等級、系統規則和充值包", "zh-CN": "管理会员等级、系统规则和充值包" },
+  pageDesc: { en: "Manage membership tiers, system rules, and recharge packages", "zh-TW": "管理會員等級、系統規則和儲值包", "zh-CN": "管理会员等级、系统规则和充值包" },
   tabTiers: { en: "Membership Tiers", "zh-TW": "等級管理", "zh-CN": "等级管理" },
   tabRules: { en: "System Rules", "zh-TW": "規則配置", "zh-CN": "规则配置" },
-  tabPackages: { en: "Recharge Packages", "zh-TW": "充值包", "zh-CN": "充值包" },
+  tabPackages: { en: "Recharge Packages", "zh-TW": "儲值包", "zh-CN": "充值包" },
   // Tiers
   tierCode: { en: "Code", "zh-TW": "代碼", "zh-CN": "代码" },
   tierName: { en: "Tier Name", "zh-TW": "等級名稱", "zh-CN": "等级名称" },
@@ -113,19 +113,19 @@ const TXT: Record<string, Record<LangKey, string>> = {
   cpAmount: { en: "CP Amount", "zh-TW": "CP 數量", "zh-CN": "CP 数量" },
   bonusCp: { en: "Bonus CP", "zh-TW": "贈送 CP", "zh-CN": "赠送 CP" },
   featured: { en: "Featured", "zh-TW": "推薦", "zh-CN": "推荐" },
-  addPackage: { en: "Add Package", "zh-TW": "新增充值包", "zh-CN": "新增充值包" },
-  editPackage: { en: "Edit Package", "zh-TW": "編輯充值包", "zh-CN": "编辑充值包" },
-  createPackage: { en: "Create Package", "zh-TW": "建立充值包", "zh-CN": "创建充值包" },
-  deleteConfirm: { en: "Deactivate this package?", "zh-TW": "確定停用此充值包？", "zh-CN": "确定停用此充值包？" },
-  deactivated: { en: "Package deactivated", "zh-TW": "充值包已停用", "zh-CN": "充值包已停用" },
-  activated: { en: "Package activated", "zh-TW": "充值包已啟用", "zh-CN": "充值包已启用" },
+  addPackage: { en: "Add Package", "zh-TW": "新增儲值包", "zh-CN": "新增充值包" },
+  editPackage: { en: "Edit Package", "zh-TW": "編輯儲值包", "zh-CN": "编辑充值包" },
+  createPackage: { en: "Create Package", "zh-TW": "建立儲值包", "zh-CN": "创建充值包" },
+  deleteConfirm: { en: "Deactivate this package?", "zh-TW": "確定停用此儲值包？", "zh-CN": "确定停用此充值包？" },
+  deactivated: { en: "Package deactivated", "zh-TW": "儲值包已停用", "zh-CN": "充值包已停用" },
+  activated: { en: "Package activated", "zh-TW": "儲值包已啟用", "zh-CN": "充值包已启用" },
   description: { en: "Description", "zh-TW": "說明", "zh-CN": "说明" },
   search: { en: "Search...", "zh-TW": "搜尋...", "zh-CN": "搜索..." },
   totalTiers: { en: "Total Tiers", "zh-TW": "等級總數", "zh-CN": "等级总数" },
   activeTiers: { en: "Active", "zh-TW": "啟用中", "zh-CN": "启用中" },
   totalRules: { en: "Total Rules", "zh-TW": "規則總數", "zh-CN": "规则总数" },
   editableRules: { en: "Editable", "zh-TW": "可編輯", "zh-CN": "可编辑" },
-  totalPackages: { en: "Total Packages", "zh-TW": "充值包總數", "zh-CN": "充值包总数" },
+  totalPackages: { en: "Total Packages", "zh-TW": "儲值包總數", "zh-CN": "充值包总数" },
   activePackages: { en: "Active", "zh-TW": "啟用中", "zh-CN": "启用中" },
   featuredPackages: { en: "Featured", "zh-TW": "推薦中", "zh-CN": "推荐中" },
   required: { en: "Required", "zh-TW": "必填", "zh-CN": "必填" },
@@ -542,7 +542,7 @@ function RulesTab({ langKey }: { langKey: LangKey }) {
 
   const CP_TYPE_LABELS: Record<string, Record<LangKey, string>> = {
     paid: { en: "Paid CP", "zh-TW": "付費CP", "zh-CN": "付费CP" },
-    recharge_bonus: { en: "Recharge Bonus CP", "zh-TW": "充值贈與CP", "zh-CN": "充值赠与CP" },
+    recharge_bonus: { en: "Recharge Bonus CP", "zh-TW": "儲值贈與CP", "zh-CN": "充值赠与CP" },
     activity: { en: "Activity CP", "zh-TW": "活動贈與CP", "zh-CN": "活动赠与CP" },
   };
 

@@ -65,7 +65,7 @@ export default function SuperAdminDashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-4 gap-5 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-5 mb-8">
         {stats.map((stat, index) => (
           <motion.div
             key={stat.label}
@@ -85,12 +85,12 @@ export default function SuperAdminDashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="col-span-2 bg-card border border-border rounded-xl p-6"
+          className="sm:col-span-2 bg-card border border-border rounded-xl p-4 sm:p-6"
         >
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">

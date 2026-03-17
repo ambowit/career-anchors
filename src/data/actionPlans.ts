@@ -99,7 +99,7 @@ export function getActionPlan(anchor: string, language: string): ActionPlanData 
       ],
       verification: [
         { action: "尝试一个月的远程工作或弹性工时", purpose: "验证你在自主安排中是否更有效率和满足感" },
-        { action: "承接一个独立完成的副业项目", purpose: "验证你是否能够自我驱动完成任务" },
+        { action: "承接一个独立完成的跨部门项目", purpose: "验证你是否能够自我驱动完成任务" },
         { action: "计算你需要多少财务缓冲来支持自主工作", purpose: "验证你是否愿意为自主权承担财务风险" },
       ],
       tradeoffs: ["大组织的职业阶梯和稳定晋升通道", "团队协作的归属感和社交", "公司提供的培训、福利和资源"],
@@ -117,7 +117,7 @@ export function getActionPlan(anchor: string, language: string): ActionPlanData 
       ],
       verification: [
         { action: "评估当前工作的稳定性（公司财务、行业前景）", purpose: "确认你是否在一个能提供长期安全感的环境中" },
-        { action: "尝试一次小风险的副业或投资", purpose: "验证你对风险的真实承受能力" },
+        { action: "尝试一次小风险的跨领域尝试", purpose: "验证你在安全基础上拓展的意愿" },
         { action: "与在不同类型组织工作的人交流", purpose: "了解不同环境的稳定性和代价" },
       ],
       tradeoffs: ["高风险高回报的创业或投资机会", "快速变化行业的前沿机会", "可能更高的短期薪资增长"],
@@ -130,11 +130,11 @@ export function getActionPlan(anchor: string, language: string): ActionPlanData 
       ],
       paths: [
         { title: "全职创业", description: "辞职全力投入自己的创业项目。最大风险，但也是最纯粹的创业体验。", timeline: "3-5年起步", risk: "高" },
-        { title: "副业创业", description: "保持稳定工作的同时，业余时间运营副业项目。验证后再决定是否全职。", timeline: "1-3年验证", risk: "中", recommended: true },
+        { title: "自主创新试点", description: "保持稳定工作的同时，利用工余时间运营自主创新项目。验证后再决定是否全职投入。", timeline: "1-3年验证", risk: "中", recommended: true },
         { title: "内部创业/创业公司早期", description: "在大公司内部负责新业务，或加入早期创业公司作为核心成员。获得创业体验同时降低风险。", timeline: "2-5年", risk: "中" },
       ],
       verification: [
-        { action: "启动一个小型副业项目", purpose: "验证你是否享受从零到一的创建过程" },
+        { action: "启动一个小型跨部门专案", purpose: "验证你是否享受从零到一的创建过程" },
         { action: "尝试向10个陌生人销售一个想法或产品", purpose: "验证你是否能承受销售和被拒绝的压力" },
         { action: "计算你能承受多长时间的零收入", purpose: "评估你的财务和心理准备程度" },
       ],
@@ -230,7 +230,7 @@ export function getActionPlan(anchor: string, language: string): ActionPlanData 
     GM: {
       learning: [
         { title: "系統學習管理理論", description: "學習組織行為學、領導力、戰略管理等基礎理論。理論基礎會讓你的管理直覺更有方向。", resources: ["MBA課程", "管理經典書籍", "領導力培訓"] },
-        { title: "培養跨職能視角", description: "主動了解財務、市場、產品、技術等不同職能的運作方式。管理者需要整合視角。", resources: ["輪崗機會", "跨部門專案", "高管影子學習"] },
+        { title: "培養跨職能視角", description: "主動了解財務、市場、產品、技術等不同職能的運作方式。管理者需要整合視角。", resources: ["輪職機會", "跨部門專案", "高管影子學習"] },
         { title: "建立人才識別能力", description: "學習如何識別、吸引、培養和留住人才。管理的核心是通過他人達成目標。", resources: ["招聘面試培訓", "教練技術", "績效管理"] },
       ],
       paths: [
@@ -258,7 +258,7 @@ export function getActionPlan(anchor: string, language: string): ActionPlanData 
       ],
       verification: [
         { action: "嘗試一個月的遠程工作或彈性工時", purpose: "驗證你在自主安排中是否更有效率和滿足感" },
-        { action: "承接一個獨立完成的副業專案", purpose: "驗證你是否能夠自我驅動完成任務" },
+        { action: "承接一個獨立完成的跨部門專案", purpose: "驗證你是否能夠自我驅動完成任務" },
         { action: "計算你需要多少財務緩衝來支持自主工作", purpose: "驗證你是否願意為自主權承擔財務風險" },
       ],
       tradeoffs: ["大組織的職業階梯和穩定晉升通道", "團隊協作的歸屬感和社交", "公司提供的培訓、福利和資源"],
@@ -267,7 +267,7 @@ export function getActionPlan(anchor: string, language: string): ActionPlanData 
       learning: [
         { title: "評估行業穩定性", description: "研究哪些行業和公司類型能提供長期穩定的就業。政府、公用事業、醫療、教育等行業值得考慮。", resources: ["行業報告", "公司財務分析", "就業市場研究"] },
         { title: "建立財務安全網", description: "即使在穩定的工作中，也要建立6-12個月的緊急儲備金。安全感也來自財務獨立。", resources: ["儲蓄計劃", "投資基礎", "保險配置"] },
-        { title: "培養跨場景技能", description: "學習在多種環境中都有價值的通用技能，增強在變化中的適應能力。", resources: ["溝通技能", "專案管理", "數據分析"] },
+        { title: "培養跨場景技能", description: "學習在多種環境中都有價值的通用技能，增強在變化中的適應能力。", resources: ["溝通技能", "專案管理", "資料分析"] },
       ],
       paths: [
         { title: "穩定型大企業/機構", description: "在政府、國企、大型穩定企業中尋求長期發展。接受可能較慢的晉升速度，換取穩定性。", timeline: "長期", risk: "低", recommended: true },
@@ -276,7 +276,7 @@ export function getActionPlan(anchor: string, language: string): ActionPlanData 
       ],
       verification: [
         { action: "評估當前工作的穩定性（公司財務、行業前景）", purpose: "確認你是否在一個能提供長期安全感的環境中" },
-        { action: "嘗試一次小風險的副業或投資", purpose: "驗證你對風險的真實承受能力" },
+        { action: "嘗試一次小風險的跨領域嘗試", purpose: "驗證你在安全基礎上拓展的意願" },
         { action: "與在不同類型組織工作的人交流", purpose: "了解不同環境的穩定性和代價" },
       ],
       tradeoffs: ["高風險高回報的創業或投資機會", "快速變化行業的先進機會", "可能更高的短期薪資增長"],
@@ -289,11 +289,11 @@ export function getActionPlan(anchor: string, language: string): ActionPlanData 
       ],
       paths: [
         { title: "全職創業", description: "辭職全力投入自己的創業專案。最大風險，但也是最純粹的創業體驗。", timeline: "3-5年起步", risk: "高" },
-        { title: "副業創業", description: "保持穩定工作的同時，業餘時間運營副業專案。驗證後再決定是否全職。", timeline: "1-3年驗證", risk: "中", recommended: true },
+        { title: "自主創新試點", description: "保持穩定工作的同時，利用工餘時間運營自主創新專案。驗證後再決定是否全職投入。", timeline: "1-3年驗證", risk: "中", recommended: true },
         { title: "內部創業/創業公司早期", description: "在大公司內部負責新業務，或加入早期創業公司作為核心成員。獲得創業體驗同時降低風險。", timeline: "2-5年", risk: "中" },
       ],
       verification: [
-        { action: "啟動一個小型副業專案", purpose: "驗證你是否享受從零到一的創建過程" },
+        { action: "啟動一個小型跨部門專案", purpose: "驗證你是否享受從零到一的創建過程" },
         { action: "嘗試向10個陌生人銷售一個想法或產品", purpose: "驗證你是否能承受銷售和被拒絕的壓力" },
         { action: "計算你能承受多長時間的零收入", purpose: "評估你的財務和心理準備程度" },
       ],

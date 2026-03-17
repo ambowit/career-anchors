@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import ShareCard from "@/components/desktop/ShareCard";
-import { DIMENSIONS, type AssessmentResult, getHighSensitivityAnchors } from "@/hooks/useAssessment";
+import { DIMENSIONS, type AssessmentResult, getCoreAdvantageAnchors } from "@/hooks/useAssessment";
 import { DIMENSION_NAMES } from "@/data/questions";
 import { useTranslation } from "@/hooks/useLanguage";
 
@@ -34,10 +34,10 @@ function buildShareCardHTML(results: AssessmentResult, language: string): string
 
   const labels = {
     reportTitle: isEn ? "Career Anchor Report" : isTW ? "職業錨測評報告" : "职业锚测评报告",
-    highSensAnchor: isEn ? "High-Sensitivity Anchor" : isTW ? "高敏感錨" : "高敏感锚",
-    noHighSens: isEn ? "No High-Sensitivity Anchor" : isTW ? "無高敏感錨" : "无高敏感锚",
+    coreAdvantageAnchor: isEn ? "Core Advantage Anchor" : isTW ? "核心優勢錨點" : "核心优势锚点",
+    noHighSens: isEn ? "No Core Advantage Anchor" : isTW ? "無核心優勢錨點" : "无核心优势锚点",
     scoreDistribution: isEn ? "Score Distribution" : isTW ? "維度得分分佈" : "维度得分分布",
-    riskIndex: isEn ? "Risk Index" : isTW ? "風險指數" : "风险指数",
+    riskIndex: isEn ? "Clarity Index" : isTW ? "錨定清晰度" : "锚定清晰度",
     stability: isEn ? "Stability" : isTW ? "穩定度" : "稳定度",
     conflictWarning: isEn ? "Conflict Warning" : isTW ? "衝突錨警示" : "冲突锚警示",
     footer: isEn
@@ -50,11 +50,11 @@ function buildShareCardHTML(results: AssessmentResult, language: string): string
     unclear: isEn ? "Unclear" : isTW ? "尚不清晰" : "尚不清晰",
   };
 
-  const highSensAnchors = results.highSensitivityAnchors?.length
-    ? results.highSensitivityAnchors
-    : getHighSensitivityAnchors(results.scores);
-  const hasHighSens = highSensAnchors.length > 0;
-  const displayAnchor = highSensAnchors[0] || results.mainAnchor || "";
+  const coreAdvAnchors = results.coreAdvantageAnchors?.length
+    ? results.coreAdvantageAnchors
+    : getCoreAdvantageAnchors(results.scores);
+  const hasHighSens = coreAdvAnchors.length > 0;
+  const displayAnchor = coreAdvAnchors[0] || results.mainAnchor || "";
   const displayAnchorName = getDimName(displayAnchor);
   const displayScore = results.scores[displayAnchor] ?? 0;
   const riskIndex = results.riskIndex ?? 0;
@@ -87,7 +87,7 @@ function buildShareCardHTML(results: AssessmentResult, language: string): string
       key,
       name: getDimName(key),
       score,
-      isHighSens: highSensAnchors.includes(key),
+      isCoreAdv: coreAdvAnchors.includes(key),
     }))
     .sort((a, b) => b.score - a.score);
 
@@ -96,10 +96,10 @@ function buildShareCardHTML(results: AssessmentResult, language: string): string
   // Score bars (top 5)
   const scoreBarsHTML = sorted
     .slice(0, 5)
-    .map(({ name, score, isHighSens }) => {
+    .map(({ name, score, isCoreAdv }) => {
       const barWidth = Math.min((score / maxScore) * 100, 100);
-      const barColor = isHighSens ? "#1C2857" : "rgba(28,40,87,0.18)";
-      const textColor = isHighSens ? "#1C2857" : "#6b7280";
+      const barColor = isCoreAdv ? "#1C2857" : "rgba(28,40,87,0.18)";
+      const textColor = isCoreAdv ? "#1C2857" : "#6b7280";
       const displayName = isEn ? name.substring(0, 8) : name.substring(0, 4);
       return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
         <div style="width:${isEn ? '80' : '64'}px;font-size:12px;color:${textColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayName}</div>
@@ -144,7 +144,7 @@ function buildShareCardHTML(results: AssessmentResult, language: string): string
     <div style="background:#1C2857;color:#ffffff;padding:16px;border-radius:4px;margin-bottom:16px;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <div style="width:16px;height:16px;border:2px solid rgba(255,255,255,0.6);border-radius:50%;"></div>
-        <span style="font-size:11px;font-weight:500;opacity:0.75;">${hasHighSens ? labels.highSensAnchor : labels.noHighSens}</span>
+        <span style="font-size:11px;font-weight:500;opacity:0.75;">${hasHighSens ? labels.coreAdvantageAnchor : labels.noHighSens}</span>
       </div>
       <div style="display:flex;align-items:flex-end;justify-content:space-between;">
         <span style="font-size:16px;font-weight:600;">${hasHighSens ? displayAnchorName : (isEn ? 'Structural combination' : isTW ? '結構性組合' : '結構性組合')}</span>
@@ -191,7 +191,7 @@ export default function ShareDialog({ results, trigger }: ShareDialogProps) {
       shareText: "来看看我的职业锚测评结果吧！",
       reportFile: "职业锚测评报告-摘要",
       dialogTitle: "分享测评摘要卡片",
-      dialogDesc: "生成简化版分享卡片，包含高敏感锚、得分分布和风险指标。如需完整报告，请使用「导出报告」功能。",
+      dialogDesc: "生成简化版分享卡片，包含核心优势锚点、得分分布和风险指标。如需完整报告，请使用「导出报告」功能。",
       download: "下载",
       copy: "复制",
       copiedBtn: "已复制",
@@ -211,7 +211,7 @@ export default function ShareDialog({ results, trigger }: ShareDialogProps) {
       shareText: "來看看我的職業錨測評結果吧！",
       reportFile: "職業錨測評報告-摘要",
       dialogTitle: "分享測評摘要卡片",
-      dialogDesc: "生成簡化版分享卡片，包含高敏感錨、得分分佈和風險指標。如需完整報告，請使用「匯出報告」功能。",
+      dialogDesc: "生成簡化版分享卡片，包含核心錨、得分分佈和清晰度指標。如需完整報告，請使用「匯出報告」功能。",
       download: "下載",
       copy: "複製",
       copiedBtn: "已複製",

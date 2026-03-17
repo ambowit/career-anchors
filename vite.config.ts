@@ -22,6 +22,7 @@ export default defineConfig({
             if (id.includes('@supabase')) return 'supabase';
             if (id.includes('@radix-ui')) return 'radix';
             if (id.includes('react-dom')) return 'react-dom';
+            if (id.includes('html2canvas') || id.includes('jspdf')) return 'pdf';
           }
         },
       },

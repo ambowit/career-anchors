@@ -2,22 +2,24 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { User, LogOut, ChevronRight, History, Settings, HelpCircle, Moon, Sun, Shield, Wallet } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useTestAuth, getWorkExperienceDescription, isConsoleRole, isUserRole, getTestConsolePath, getRoleColor, getRoleInitials, TEST_ACCOUNTS, type LanguageKey } from "@/hooks/useTestAuth";
+import { useTestAuth, getWorkExperienceDescription, isConsoleRole, isUserRole, getTestConsolePath, getRoleColor, getRoleInitials, type LanguageKey } from "@/hooks/useTestAuth";
 import { findConsolePathFromProfile } from "@/lib/permissions";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { useTranslation } from "@/hooks/useLanguage";
-import { useCpWallet } from "@/hooks/useCpWallet";
+
 
 export default function MobileProfilePage() {
   const { language } = useTranslation();
   const navigate = useNavigate();
   const { user, profile, loading } = useAuth();
   const { isTestLoggedIn, testRole, careerStage, testLogout } = useTestAuth();
-  const testUserName = isTestLoggedIn ? TEST_ACCOUNTS[testRole]?.name[language as LanguageKey] ?? testRole : "";
+  const testUserName = "";
   const { theme, setTheme } = useTheme();
-  const cpWalletData = useCpWallet();
+  const { isCpPointsEnabled } = useFeaturePermissions();
+
 
   // Check if logged in (real or test)
   const isLoggedIn = !!user || isTestLoggedIn;
@@ -81,7 +83,7 @@ export default function MobileProfilePage() {
   const displayName = user 
     ? (user.user_metadata?.full_name || user.email?.split("@")[0])
     : testUserName;
-  const displayEmail = user?.email || (TEST_ACCOUNTS[testRole]?.email ?? "");
+  const displayEmail = user?.email || "";
   const displayInitial = user 
     ? user.email?.charAt(0).toUpperCase() 
     : getRoleInitials(testRole);
@@ -105,17 +107,6 @@ export default function MobileProfilePage() {
           <div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-lg">{displayName}</span>
-              {isTestLoggedIn && !user && (
-                <span 
-                  className="text-xs px-2 py-0.5 rounded-full"
-                  style={{ 
-                    backgroundColor: isConsoleRole(testRole) ? "rgba(255,255,255,0.2)" : "hsl(75, 55%, 70%)",
-                    color: isConsoleRole(testRole) ? "white" : "hsl(228, 51%, 15%)"
-                  }}
-                >
-                  {TEST_ACCOUNTS[testRole]?.name[language as LanguageKey] ?? testRole}
-                </span>
-              )}
             </div>
             <div className="text-sm opacity-70">{displayEmail}</div>
             {isTestLoggedIn && isUserRole(testRole) && (() => {
@@ -130,63 +121,6 @@ export default function MobileProfilePage() {
         </div>
       </motion.section>
 
-      {/* CP Wallet Summary */}
-      {isLoggedIn && cpWalletData.wallet && (
-        <motion.section
-          className="px-5 mt-5"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-        >
-          <button
-            onClick={() => navigate("/cp-wallet")}
-            className="w-full bg-gradient-to-r from-[#1a3a5c] to-[#0f2744] rounded-xl p-4 text-left transition-all active:scale-[0.98]"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Wallet className="w-4 h-4 text-white/80" />
-                <span className="text-xs font-medium text-white/70">
-                  {language === "en" ? "CP Wallet" : language === "zh-TW" ? "CP 錢包" : "CP 钱包"}
-                </span>
-              </div>
-              {cpWalletData.membership?.current_tier && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/15 text-white/90 font-medium">
-                  {cpWalletData.membership.current_tier.icon_emoji}{" "}
-                  {language === "en"
-                    ? cpWalletData.membership.current_tier.tier_name_en
-                    : language === "zh-TW"
-                      ? cpWalletData.membership.current_tier.tier_name_zh_tw
-                      : cpWalletData.membership.current_tier.tier_name_zh_cn}
-                </span>
-              )}
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold text-white">
-                {Number(cpWalletData.wallet.total_balance).toLocaleString()}
-              </span>
-              <span className="text-xs text-white/60">CP</span>
-            </div>
-            <div className="flex items-center justify-between mt-2">
-              <div className="flex gap-3">
-                <span className="text-[10px] text-white/50">
-                  {language === "en" ? "Paid" : language === "zh-TW" ? "付費" : "付费"}{" "}
-                  {Number(cpWalletData.wallet.balance_paid).toLocaleString()}
-                </span>
-                <span className="text-[10px] text-white/50">
-                  {language === "en" ? "Bonus" : language === "zh-TW" ? "贈送" : "赠送"}{" "}
-                  {Number(cpWalletData.wallet.balance_recharge_bonus).toLocaleString()}
-                </span>
-                <span className="text-[10px] text-white/50">
-                  {language === "en" ? "Activity" : language === "zh-TW" ? "活動" : "活动"}{" "}
-                  {Number(cpWalletData.wallet.balance_activity).toLocaleString()}
-                </span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-white/40" />
-            </div>
-          </button>
-        </motion.section>
-      )}
-
       {/* Menu Items */}
       <motion.section
         className="px-5 mt-6"
@@ -200,6 +134,13 @@ export default function MobileProfilePage() {
             label={language === "en" ? "Assessment History" : language === "zh-TW" ? "測評歷史" : "测评历史"}
             onClick={() => navigate("/history")}
           />
+          {isCpPointsEnabled && (
+            <MenuItem
+              icon={Wallet}
+              label={language === "en" ? "CP Wallet" : language === "zh-TW" ? "CP 錢包" : "CP 钱包"}
+              onClick={() => navigate("/cp-wallet")}
+            />
+          )}
           <MenuItem
             icon={theme === "dark" ? Sun : Moon}
             label={theme === "dark" ? "浅色模式" : "深色模式"}

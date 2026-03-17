@@ -93,72 +93,48 @@ export default function CareerStageSelector({ onComplete }: CareerStageSelectorP
       <div className="space-y-2.5 mb-5">
         <label
           className={cn(
-            "flex items-center gap-3.5 p-3.5 rounded-xl border-2 cursor-pointer transition-all",
-            isExecutive ? "border-accent bg-accent/10" : "border-border bg-card hover:border-accent/50"
+            "flex items-center gap-3.5 p-3.5 rounded-xl border-2 transition-all",
+            "border-border bg-card opacity-50 cursor-not-allowed"
           )}
         >
           <input
             type="checkbox"
-            checked={isExecutive}
-            onChange={(event) => setIsExecutive(event.target.checked)}
+            checked={false}
+            disabled
             className="sr-only"
           />
           <div
-            className={cn(
-              "w-10 h-10 rounded-lg flex items-center justify-center transition-colors flex-shrink-0",
-              isExecutive ? "bg-amber-500 text-white" : "bg-muted/20 text-muted-foreground"
-            )}
+            className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors flex-shrink-0 bg-muted/20 text-muted-foreground"
           >
             <Crown className="w-4.5 h-4.5" />
           </div>
-          <span className={cn("font-medium text-sm", isExecutive ? "text-foreground" : "text-foreground")}>
+          <span className="font-medium text-sm text-muted-foreground">
             {executiveLabel}
           </span>
-          <div className={cn(
-            "ml-auto w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0",
-            isExecutive ? "border-accent bg-accent" : "border-muted-foreground/30"
-          )}>
-            {isExecutive && (
-              <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-            )}
-          </div>
+          <div className="ml-auto w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 border-muted-foreground/30" />
         </label>
 
         <label
           className={cn(
-            "flex items-center gap-3.5 p-3.5 rounded-xl border-2 cursor-pointer transition-all",
-            isEntrepreneur ? "border-accent bg-accent/10" : "border-border bg-card hover:border-accent/50"
+            "flex items-center gap-3.5 p-3.5 rounded-xl border-2 transition-all",
+            "border-border bg-card opacity-50 cursor-not-allowed"
           )}
         >
           <input
             type="checkbox"
-            checked={isEntrepreneur}
-            onChange={(event) => setIsEntrepreneur(event.target.checked)}
+            checked={false}
+            disabled
             className="sr-only"
           />
           <div
-            className={cn(
-              "w-10 h-10 rounded-lg flex items-center justify-center transition-colors flex-shrink-0",
-              isEntrepreneur ? "bg-emerald-500 text-white" : "bg-muted/20 text-muted-foreground"
-            )}
+            className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors flex-shrink-0 bg-muted/20 text-muted-foreground"
           >
             <Rocket className="w-4.5 h-4.5" />
           </div>
-          <span className={cn("font-medium text-sm", isEntrepreneur ? "text-foreground" : "text-foreground")}>
+          <span className="font-medium text-sm text-muted-foreground">
             {entrepreneurLabel}
           </span>
-          <div className={cn(
-            "ml-auto w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0",
-            isEntrepreneur ? "border-accent bg-accent" : "border-muted-foreground/30"
-          )}>
-            {isEntrepreneur && (
-              <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-            )}
-          </div>
+          <div className="ml-auto w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 border-muted-foreground/30" />
         </label>
       </div>
 

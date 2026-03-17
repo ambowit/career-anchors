@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   Plus, FileText, ChevronRight, Clock, Layers, Blocks,
-  Search, Loader2, Trash2, Edit,
+  Search, Loader2, Trash2, Edit, Copy, Link2,
   FileBarChart, AlertTriangle, Briefcase, Sparkles, Combine,
 } from "lucide-react";
 import {
@@ -17,6 +17,8 @@ import {
   getCategoryLabel as getCatLabel, getCategoryColor,
 } from "@/lib/reportConstants";
 import ReportVersionDetail from "@/components/desktop/ReportVersionDetail";
+import CareerStageDescriptionsTab from "@/components/desktop/CareerStageDescriptionsTab";
+import GeneratorBindingsTab from "@/components/desktop/GeneratorBindingsTab";
 
 /* ─── i18n ─── */
 const TXT = {
@@ -25,6 +27,8 @@ const TXT = {
     pageDesc: "Create report generators by category. Once published, reports are auto-generated for all users. Only one active generator per category.",
     tabVersions: "Generators",
     tabReports: "Generated Reports",
+    tabStages: "Career Stages",
+    tabBindings: "Bindings",
     createVersion: "Create Generator",
     versionNumber: "Version Number",
     versionPlaceholder: "e.g. V1, V2",
@@ -43,6 +47,9 @@ const TXT = {
     triAnchors: "tri-anchors",
     deleteVersion: "Delete",
     deleteVersionConfirm: "Are you sure you want to permanently delete this generator? All associated text blocks, score ranges, combinations, and tri-anchor mappings will be removed. This cannot be undone.",
+    duplicateVersion: "Duplicate",
+    duplicateVersionSuccess: "Generator duplicated successfully",
+    duplicateVersionError: "Failed to duplicate generator",
     deleteVersionSuccess: "Generator deleted",
     editVersion: "Edit",
     editVersionSuccess: "Generator updated",
@@ -59,7 +66,7 @@ const TXT = {
     deleteReportSuccess: "Report deleted",
     searchReports: "Search by report # or user...",
     career_anchor: "Career Anchor",
-    ideal_card: "Life Card",
+    ideal_card: "Espresso Card",
     combined: "Combined",
     save: "Save",
     filterAll: "All Categories",
@@ -69,6 +76,8 @@ const TXT = {
     pageDesc: "按類別創建報告生成器。發布後，所有測評人員的報告根據啟用的生成器自動生成。每個類別同一時間只能有一個生成器啟用。",
     tabVersions: "生成器",
     tabReports: "已生成報告",
+    tabStages: "職場階段",
+    tabBindings: "綁定管理",
     createVersion: "創建生成器",
     versionNumber: "版本號",
     versionPlaceholder: "例如 V1、V2",
@@ -87,6 +96,9 @@ const TXT = {
     triAnchors: "三錨",
     deleteVersion: "刪除",
     deleteVersionConfirm: "確定要永久刪除此生成器嗎？所有相關的文本塊、分數區間、組合和三錨映射都將被刪除，此操作無法撤銷。",
+    duplicateVersion: "複製",
+    duplicateVersionSuccess: "生成器已複製",
+    duplicateVersionError: "生成器複製失敗",
     deleteVersionSuccess: "生成器已刪除",
     editVersion: "編輯",
     editVersionSuccess: "生成器已更新",
@@ -113,6 +125,8 @@ const TXT = {
     pageDesc: "按类别创建报告生成器。发布后，所有测评人员的报告根据启用的生成器自动生成。每个类别同一时间只能有一个生成器启用。",
     tabVersions: "生成器",
     tabReports: "已生成报告",
+    tabStages: "职场阶段",
+    tabBindings: "绑定管理",
     createVersion: "创建生成器",
     versionNumber: "版本号",
     versionPlaceholder: "例如 V1、V2",
@@ -131,6 +145,9 @@ const TXT = {
     triAnchors: "三锚",
     deleteVersion: "删除",
     deleteVersionConfirm: "确定要永久删除此生成器吗？所有相关的文本块、分数区间、组合和三锚映射都将被删除，此操作无法撤销。",
+    duplicateVersion: "复制",
+    duplicateVersionSuccess: "生成器已复制",
+    duplicateVersionError: "生成器复制失败",
     deleteVersionSuccess: "生成器已删除",
     editVersion: "编辑",
     editVersionSuccess: "生成器已更新",
@@ -172,7 +189,7 @@ export default function ReportGeneratorPage() {
   const queryClient = useQueryClient();
   const txt = TXT[language] || TXT["zh-TW"];
 
-  const [activeTab, setActiveTab] = useState<"versions" | "reports">("versions");
+  const [activeTab, setActiveTab] = useState<"versions" | "reports" | "stages" | "bindings">("versions");
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [reportSearch, setReportSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -321,6 +338,92 @@ export default function ReportGeneratorPage() {
     onError: (error: any) => toast.error(error.message),
   });
 
+  const duplicateVersionMutation = useMutation({
+    mutationFn: async (sourceVersionId: string) => {
+      // 1. Read source version
+      const { data: source, error: sourceError } = await (supabase as any)
+        .from("report_versions")
+        .select("*")
+        .eq("id", sourceVersionId)
+        .single();
+      if (sourceError || !source) throw new Error(sourceError?.message || "Source not found");
+
+      // 2. Create new version as draft with "(Copy)" suffix
+      const { data: newVersion, error: newVersionError } = await (supabase as any)
+        .from("report_versions")
+        .insert({
+          assessment_type: source.assessment_type,
+          version_number: `${source.version_number} (Copy)`,
+          description: source.description || null,
+          created_by: user?.id,
+          status: "draft",
+        })
+        .select()
+        .single();
+      if (newVersionError) throw newVersionError;
+
+      // 3. Copy score ranges
+      const { data: ranges } = await (supabase as any)
+        .from("anchor_score_ranges")
+        .select("*")
+        .eq("version_id", sourceVersionId);
+      if (ranges && ranges.length > 0) {
+        const rangeRows = ranges.map((rangeItem: any) => {
+          const { id, version_id, created_at, ...rest } = rangeItem;
+          return { ...rest, version_id: newVersion.id };
+        });
+        await (supabase as any).from("anchor_score_ranges").insert(rangeRows);
+      }
+
+      // 4. Copy text blocks
+      const { data: blocks } = await (supabase as any)
+        .from("anchor_text_blocks")
+        .select("*")
+        .eq("version_id", sourceVersionId);
+      if (blocks && blocks.length > 0) {
+        const blockRows = blocks.map((blockItem: any) => {
+          const { id, version_id, created_at, updated_at, is_locked, ...rest } = blockItem;
+          return { ...rest, version_id: newVersion.id, is_locked: false, created_by: user?.id };
+        });
+        await (supabase as any).from("anchor_text_blocks").insert(blockRows);
+      }
+
+      // 5. Copy combination mappings
+      const { data: combos } = await (supabase as any)
+        .from("anchor_combination_mapping")
+        .select("*")
+        .eq("version_id", sourceVersionId);
+      if (combos && combos.length > 0) {
+        const comboRows = combos.map((comboItem: any) => {
+          const { id, version_id, created_at, is_locked, ...rest } = comboItem;
+          return { ...rest, version_id: newVersion.id, is_locked: false, created_by: user?.id };
+        });
+        await (supabase as any).from("anchor_combination_mapping").insert(comboRows);
+      }
+
+      // 6. Copy tri-anchor mappings
+      const { data: tris } = await (supabase as any)
+        .from("anchor_tri_mapping")
+        .select("*")
+        .eq("version_id", sourceVersionId);
+      if (tris && tris.length > 0) {
+        const triRows = tris.map((triItem: any) => {
+          const { id, version_id, created_at, is_locked, ...rest } = triItem;
+          return { ...rest, version_id: newVersion.id, is_locked: false, created_by: user?.id };
+        });
+        await (supabase as any).from("anchor_tri_mapping").insert(triRows);
+      }
+
+      return newVersion;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["report-versions"] });
+      queryClient.invalidateQueries({ queryKey: ["report-version-stats"] });
+      toast.success(txt.duplicateVersionSuccess);
+    },
+    onError: (error: any) => toast.error(error.message || txt.duplicateVersionError),
+  });
+
   const deleteReportMutation = useMutation({
     mutationFn: async (reportId: string) => {
       const { error } = await (supabase as any)
@@ -384,6 +487,22 @@ export default function ReportGeneratorPage() {
           )}
         >
           <FileBarChart className="w-4 h-4" /> {txt.tabReports}
+        </button>
+        <button
+          onClick={() => setActiveTab("stages")}
+          className={cn("px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2",
+            activeTab === "stages" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+          )}
+        >
+          <Briefcase className="w-4 h-4" /> {txt.tabStages}
+        </button>
+        <button
+          onClick={() => setActiveTab("bindings")}
+          className={cn("px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2",
+            activeTab === "bindings" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+          )}
+        >
+          <Link2 className="w-4 h-4" /> {txt.tabBindings}
         </button>
       </div>
 
@@ -499,6 +618,17 @@ export default function ReportGeneratorPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            duplicateVersionMutation.mutate(version.id);
+                          }}
+                          disabled={duplicateVersionMutation.isPending}
+                          className="p-2 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors"
+                          title={txt.duplicateVersion}
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={(event) => {
                             event.stopPropagation();
@@ -724,6 +854,12 @@ export default function ReportGeneratorPage() {
           </AnimatePresence>
         </div>
       )}
+
+      {/* ═══ STAGES TAB ═══ */}
+      {activeTab === "stages" && <CareerStageDescriptionsTab />}
+
+      {/* ═══ BINDINGS TAB ═══ */}
+      {activeTab === "bindings" && <GeneratorBindingsTab />}
 
       {/* ═══ REPORTS TAB ═══ */}
       {activeTab === "reports" && (

@@ -11,10 +11,9 @@ export type UserRole =
   | "employee"
   | "consultant"
   | "client"
-  | "individual"
-  | "partner";
+  | "individual";
 
-export type CareerStage = "early" | "mid" | "senior" | "executive" | "hr" | null;
+export type CareerStage = "early" | "mid" | "senior" | "executive" | "entrepreneur" | "hr" | null;
 export type AssessmentMode = "adaptive" | "full";
 export type LanguageKey = "zh-CN" | "zh-TW" | "en";
 
@@ -76,19 +75,14 @@ export const TEST_ACCOUNTS: Record<UserRole, TestAccount> = {
     password: "SCPC2024!IndUser",
     category: "individual",
   },
-  partner: {
-    name: { "zh-CN": "合作方", "zh-TW": "合作方", en: "Partner" },
-    email: "partner@scpc.demo",
-    password: "SCPC2024!Partner",
-    category: "platform",
-  },
+
 };
 
 // ─── Role Helpers ───────────────────────────────────────────────────────
 
 /** Does this role have a management console? */
 export function isConsoleRole(role: UserRole): boolean {
-  return ["super_admin", "org_admin", "hr", "department_manager", "consultant", "partner"].includes(role);
+  return ["super_admin", "org_admin", "hr", "department_manager", "consultant"].includes(role);
 }
 
 /** Is this a regular end-user role? (no console) */
@@ -105,7 +99,6 @@ export function getTestConsolePath(role: UserRole): string {
     case "hr":
     case "department_manager": return "/org";
     case "consultant": return "/consultant";
-    case "partner": return "/partner";
     default: return "/";
   }
 }
@@ -121,7 +114,6 @@ export function getRoleColor(role: UserRole): string {
     case "employee": return "hsl(150, 50%, 42%)";
     case "client": return "hsl(30, 65%, 50%)";
     case "individual": return "hsl(75, 55%, 45%)";
-    case "partner": return "hsl(280, 55%, 50%)";
     default: return "hsl(220, 15%, 50%)";
   }
 }
@@ -137,7 +129,6 @@ export function getRoleInitials(role: UserRole): string {
     case "employee": return "EM";
     case "client": return "CL";
     case "individual": return "IN";
-    case "partner": return "PT";
     default: return "U";
   }
 }
@@ -157,7 +148,8 @@ export function getCategoryLabel(category: string, language: LanguageKey): strin
 
 export function deriveCareerStage(workYears: number | null, isExecutive: boolean, isEntrepreneur: boolean): CareerStage {
   if (workYears === null) return null;
-  if (isExecutive || isEntrepreneur) return "executive";
+  if (isExecutive) return "executive";
+  if (isEntrepreneur) return "entrepreneur";
   if (workYears <= 5) return "early";
   if (workYears <= 10) return "mid";
   return "senior";
@@ -401,6 +393,7 @@ export const useTestAuth = create<TestAuthStore>()(
           if (user) {
             supabase.from("profiles").update({
               career_stage: derivedStage,
+              work_experience_years: years ?? 0,
               updated_at: new Date().toISOString(),
             }).eq("id", user.id);
           }
@@ -409,14 +402,16 @@ export const useTestAuth = create<TestAuthStore>()(
 
       setIsExecutive: (value: boolean) => {
         const state = get();
-        const derivedStage = deriveCareerStage(state.workYears, value, state.isEntrepreneur);
-        set({ isExecutive: value, careerStage: derivedStage });
+        const newIsEntrepreneur = value ? false : state.isEntrepreneur;
+        const derivedStage = deriveCareerStage(state.workYears, value, newIsEntrepreneur);
+        set({ isExecutive: value, isEntrepreneur: newIsEntrepreneur, careerStage: derivedStage });
       },
 
       setIsEntrepreneur: (value: boolean) => {
         const state = get();
-        const derivedStage = deriveCareerStage(state.workYears, state.isExecutive, value);
-        set({ isEntrepreneur: value, careerStage: derivedStage });
+        const newIsExecutive = value ? false : state.isExecutive;
+        const derivedStage = deriveCareerStage(state.workYears, newIsExecutive, value);
+        set({ isEntrepreneur: value, isExecutive: newIsExecutive, careerStage: derivedStage });
       },
 
       setAssessmentMode: (mode: AssessmentMode) => {

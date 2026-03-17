@@ -30,11 +30,7 @@ import { useTranslation } from "@/hooks/useLanguage";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useTestAuth } from "@/hooks/useTestAuth";
 import { useAuth } from "@/hooks/useAuth";
-import {
-  downloadReportWithCover,
-  generateFusionAnalysisReportHTML,
-  type ReportWithCoverOptions,
-} from "@/lib/exportReport";
+import { downloadLatestFusionReport } from "@/lib/reportFusionDownload";
 import { getStageInterpretation, type CareerStage as InterpCareerStage } from "@/data/stageInterpretations";
 import { getWorkExperienceDescription, type LanguageKey } from "@/hooks/useTestAuth";
 import {
@@ -47,7 +43,8 @@ import {
 import { DIMENSION_NAMES } from "@/data/questions";
 import { getActionPlan } from "@/data/actionPlans";
 import RadarChart from "@/components/desktop/RadarChart";
-import { cn } from "@/lib/utils";
+import { cn, resolveUserDisplayName, resolveWorkExperienceYears } from "@/lib/utils";
+
 
 interface IdealCardResult {
   rank: number;
@@ -238,20 +235,20 @@ const ANCHOR_IF_ABSENT: Record<string, Record<string, string>> = {
 const getScoreLevel = (score: number, lang: string): { label: string; color: string } => {
   // Standardized 0-100 scale thresholds
   if (lang === "en") {
-    if (score >= 80) return { label: "Non-negotiable", color: "#dc2626" };
-    if (score >= 65) return { label: "Highly sensitive", color: "#d97706" };
-    if (score >= 45) return { label: "Conditional", color: "#2563eb" };
+    if (score >= 80) return { label: "Core Advantage", color: "#dc2626" };
+    if (score >= 65) return { label: "High-Sensitivity", color: "#d97706" };
+    if (score >= 45) return { label: "Moderate", color: "#2563eb" };
     return { label: "Non-core", color: "#94a3b8" };
   }
   if (lang === "zh-TW") {
-    if (score >= 80) return { label: "不可妥協", color: "#dc2626" };
-    if (score >= 65) return { label: "高敏感", color: "#d97706" };
-    if (score >= 45) return { label: "條件性", color: "#2563eb" };
+    if (score >= 80) return { label: "核心優勢", color: "#dc2626" };
+    if (score >= 65) return { label: "高敏感區", color: "#d97706" };
+    if (score >= 45) return { label: "中度影響", color: "#2563eb" };
     return { label: "非核心", color: "#94a3b8" };
   }
-  if (score >= 80) return { label: "不可妥协", color: "#dc2626" };
-  if (score >= 65) return { label: "高敏感", color: "#d97706" };
-  if (score >= 45) return { label: "条件性", color: "#2563eb" };
+  if (score >= 80) return { label: "核心优势", color: "#dc2626" };
+  if (score >= 65) return { label: "高敏感区", color: "#d97706" };
+  if (score >= 45) return { label: "中度影响", color: "#2563eb" };
   return { label: "非核心", color: "#94a3b8" };
 };
 
@@ -267,6 +264,7 @@ export default function ComprehensiveReportPage() {
   const [careerAnchorData, setCareerAnchorData] = useState<any>(null);
   const [idealCardResults, setIdealCardResults] = useState<IdealCardResult[]>([]);
   const [isExporting, setIsExporting] = useState(false);
+
   const [isCopied, setIsCopied] = useState(false);
 
   useEffect(() => {
@@ -297,11 +295,11 @@ export default function ComprehensiveReportPage() {
   const alignmentAnalysis = useMemo(() => {
     if (!careerAnchorData) return null;
     // Use first high-sensitivity anchor (>80) or fallback to mainAnchor
-    const highSensAnchors = Object.entries(careerAnchorData.scores || {})
-      .filter(([, s]) => s > 80)
+    const coreAdvAnchors = Object.entries(careerAnchorData.scores || {})
+      .filter(([, s]) => s >= 80)
       .sort(([, a], [, b]) => b - a)
       .map(([d]) => d);
-    const anchor = highSensAnchors[0] || careerAnchorData.mainAnchor;
+    const anchor = coreAdvAnchors[0] || careerAnchorData.mainAnchor;
     const affinity = ANCHOR_CATEGORY_AFFINITY[anchor];
     if (!affinity) return null;
 
@@ -326,46 +324,26 @@ export default function ComprehensiveReportPage() {
     };
   }, [careerAnchorData, categoryDistribution]);
 
-  // Download report as professional PDF with cover page
+  // Download unified fusion report as professional PDF (includes V3 quantitative + AI sections)
   const handleDownload = useCallback(async () => {
     if (!careerAnchorData || idealCardResults.length === 0) return;
     setIsExporting(true);
     try {
       const userId = user?.id || "anonymous";
-      const userName = profile?.full_name || "";
+      const userName = resolveUserDisplayName(profile, user, language);
 
-      const reportHtml = generateFusionAnalysisReportHTML(
-        {
-          mainAnchor: highSensAnchorsForReport[0] || careerAnchorData.mainAnchor,
-          scores: careerAnchorData.scores,
-          rankedCards: idealCardResults.map((r: IdealCardResult) => ({
-            rank: r.rank,
-            cardId: r.cardId,
-            category: r.category,
-          })),
-          alignmentPercent: alignmentAnalysis?.alignmentPercent || 0,
-          alignmentLevel: alignmentAnalysis?.alignmentLevel || "moderate",
-          userName: userName || undefined,
-          createdAt: new Date().toLocaleString(
-            language === "en" ? "en-US" : language === "zh-TW" ? "zh-TW" : "zh-CN"
-          ),
-        },
-        language
+      const success = await downloadLatestFusionReport(
+        userId,
+        userName,
+        profile?.career_stage || careerStage || "mid",
+        resolveWorkExperienceYears(profile?.work_experience_years, workYears, profile?.career_stage || careerStage),
+        language,
       );
 
-      await downloadReportWithCover(
-        reportHtml,
-        {
-          reportType: "fusion",
-          userName: userName || (language === "en" ? "User" : "用戶"),
-          workExperienceYears: workYears,
-          careerStage: careerStage || "mid",
-          reportVersion: "professional",
-          language,
-          userId,
-        },
-        `comprehensive-report-${new Date().toISOString().slice(0, 10)}.pdf`
-      );
+      if (!success) {
+        toast.error(language === "en" ? "No report data found" : language === "zh-TW" ? "未找到報告數據" : "未找到报告数据");
+        return;
+      }
 
       toast.success(language === "en" ? "Report downloaded" : language === "zh-TW" ? "報告已下載" : "报告已下载");
     } catch {
@@ -373,7 +351,7 @@ export default function ComprehensiveReportPage() {
     } finally {
       setIsExporting(false);
     }
-  }, [language, careerAnchorData, idealCardResults, alignmentAnalysis, user, profile, workYears, careerStage]);
+  }, [language, careerAnchorData, idealCardResults, user, profile, workYears, careerStage]);
 
   // Copy link to clipboard
   const handleCopyLink = useCallback(async () => {
@@ -445,13 +423,13 @@ export default function ComprehensiveReportPage() {
     { bg: "#1a3a5c", text: "#ffffff" },
   ];
 
-  // Compute high-sensitivity anchors for display
-  const highSensAnchorsForReport = Object.entries(careerAnchorData.scores || {})
-    .filter(([, s]) => s > 80)
+  // Compute core advantage anchors for display
+  const coreAdvAnchorsForReport = Object.entries(careerAnchorData.scores || {})
+    .filter(([, s]) => s >= 80)
     .sort(([, a], [, b]) => b - a)
     .map(([d]) => d);
-  const hasHighSens = highSensAnchorsForReport.length > 0;
-  const displayAnchorForReport = highSensAnchorsForReport[0] || careerAnchorData.mainAnchor;
+  const hasCoreAdv = coreAdvAnchorsForReport.length > 0;
+  const displayAnchorForReport = coreAdvAnchorsForReport[0] || careerAnchorData.mainAnchor;
   const mainAnchorName = getDimensionName(displayAnchorForReport);
 
   const texts = {
@@ -460,8 +438,8 @@ export default function ComprehensiveReportPage() {
       reportSubtitle: "职业锚测评 + 理想人生卡",
       chapterOne: "第一部分：职业锚分析",
       chapterOneDesc: "你在长期职业中不能被牺牲的核心需求",
-      highSensAnchor: "高敏感锚",
-      noHighSens: "无高敏感锚",
+      coreAdvAnchor: "核心优势锚点",
+      noCoreAdv: "无核心优势锚点",
       structuralCombination: "当前为结构性驱动组合状态",
       chapterTwo: "第二部分：理想人生卡分析",
       chapterTwoDesc: "你人生中最重要的10个价值观",
@@ -494,7 +472,7 @@ export default function ComprehensiveReportPage() {
       verificationTitle: "验证方式",
       verificationDesc: "通过实际经历验证评估结果",
       tradeoffTitle: "重要提醒：取舍是必然的",
-      tradeoffDesc: "选择符合高敏感锚的职业路径，意味着你可能需要放弃：",
+      tradeoffDesc: "选择符合核心优势锚点的职业路径，意味着你可能需要放弃：",
       tradeoffConclusion: "这不是损失，而是聚焦。明确知道自己放弃什么，比模糊地什么都想要更有力量。",
       recommended: "推荐",
       timeline: "时间跨度",
@@ -534,8 +512,8 @@ export default function ComprehensiveReportPage() {
       reportSubtitle: "職業錨測評 + 理想人生卡",
       chapterOne: "第一部分：職業錨分析",
       chapterOneDesc: "你在長期職業中不能被犧牲的核心需求",
-      highSensAnchor: "高敏感錨",
-      noHighSens: "無高敏感錨",
+      coreAdvAnchor: "核心優勢錨點",
+      noCoreAdv: "無核心優勢錨點",
       structuralCombination: "當前為結構性驅動組合狀態",
       chapterTwo: "第二部分：理想人生卡分析",
       chapterTwoDesc: "你人生中最重要的10個價值觀",
@@ -568,7 +546,7 @@ export default function ComprehensiveReportPage() {
       verificationTitle: "驗證方式",
       verificationDesc: "通過實際經歷驗證評估結果",
       tradeoffTitle: "重要提醒：取捨是必然的",
-      tradeoffDesc: "選擇符合高敏感錨的職業路徑，意味著你可能需要放棄：",
+      tradeoffDesc: "選擇符合核心優勢錨點的職業路徑，意味著你可能需要放棄：",
       tradeoffConclusion: "這不是損失，而是聚焦。明確知道自己放棄什麼，比模糊地什麼都想要更有力量。",
       recommended: "推薦",
       timeline: "時間跨度",
@@ -605,13 +583,13 @@ export default function ComprehensiveReportPage() {
     },
     en: {
       reportTitle: "Comprehensive Analysis Report",
-      reportSubtitle: "Career Anchor Assessment + Ideal Life Cards",
+      reportSubtitle: "Career Anchor Assessment + Espresso Cards",
       chapterOne: "Part 1: Career Anchor Analysis",
       chapterOneDesc: "Core needs that cannot be sacrificed in your long-term career",
-      highSensAnchor: "High-Sensitivity Anchor",
-      noHighSens: "No High-Sensitivity Anchor",
+      coreAdvAnchor: "Core Advantage Anchor",
+      noCoreAdv: "No Core Advantage Anchor",
       structuralCombination: "Currently in structural drive combination state",
-      chapterTwo: "Part 2: Ideal Life Card Analysis",
+      chapterTwo: "Part 2: Espresso Card Analysis",
       chapterTwoDesc: "Your 10 most important life values",
       topThreeTitle: "Three Most Important Values",
       distributionTitle: "Value Category Distribution",
@@ -654,7 +632,7 @@ export default function ComprehensiveReportPage() {
       ch3ConflictTitle: "A tension to be aware of",
       ch3ConflictNote: "You care about two things that are structurally hard to satisfy simultaneously long-term. This isn't about you not being good enough \u2014 anyone would feel drained trying to maintain both.",
       ch3ScoreLevels: "Dimension Constraint Levels",
-      ch3IdealTitle: "Ideal Life Card Deep Interpretation",
+      ch3IdealTitle: "Espresso Card Deep Interpretation",
       ch3OrientTitle: "Work vs Life Orientation",
       ch3WorkLabel: "Work Orientation",
       ch3LifeLabel: "Life Orientation",
@@ -698,12 +676,22 @@ export default function ComprehensiveReportPage() {
           </button>
           <div className="flex items-center gap-2">
             <button
+              onClick={() => navigate("/fusion-report")}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-[#1a365d] text-[#1a365d] hover:bg-[#1a365d]/5 transition-colors"
+              title={language === "en" ? "View Complete Report" : language === "zh-TW" ? "查看完整報告" : "查看完整报告"}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{language === "en" ? "View Report" : language === "zh-TW" ? "查看報告" : "查看报告"}</span>
+            </button>
+            <button
               onClick={handleDownload}
               disabled={isExporting}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg text-white transition-colors disabled:opacity-50"
+              style={{ backgroundColor: "#1a365d" }}
+              title={language === "en" ? "Download Complete Report" : language === "zh-TW" ? "下載完整報告" : "下载完整报告"}
             >
               {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline">{txt.download}</span>
+              <span className="hidden sm:inline">{language === "en" ? "Full Report" : language === "zh-TW" ? "完整報告" : "完整报告"}</span>
             </button>
             <button
               onClick={handleCopyLink}
@@ -789,7 +777,7 @@ export default function ComprehensiveReportPage() {
             <div>
               <RadarChart
                 scores={careerAnchorData.scores}
-                highSensitivityAnchors={highSensAnchorsForReport}
+                coreAdvantageAnchors={coreAdvAnchorsForReport}
                 animate={!prefersReducedMotion}
               />
             </div>
@@ -797,9 +785,9 @@ export default function ComprehensiveReportPage() {
             {/* Anchor Summary */}
             <div className="space-y-4">
               <div className="p-4 rounded-xl text-white" style={{ background: "linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%)" }}>
-                <span className="text-xs font-medium text-white/60">{hasHighSens ? txt.highSensAnchor : txt.noHighSens}</span>
+                <span className="text-xs font-medium text-white/60">{hasCoreAdv ? txt.coreAdvAnchor : txt.noCoreAdv}</span>
                 <div className="text-xl font-bold mt-1">{mainAnchorName}</div>
-                {hasHighSens ? (
+                {hasCoreAdv ? (
                   <div className="text-3xl font-bold mt-2">
                     {Number(careerAnchorData.scores[displayAnchorForReport]) || 0}
                   </div>
@@ -979,9 +967,9 @@ export default function ComprehensiveReportPage() {
             {/* Main anchor meaning card */}
             {displayAnchorForReport && (
               <div className="p-5 rounded-xl mb-4" style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #2d5a8c 100%)" }}>
-                <div className="text-xs font-medium text-white/50 mb-1">{hasHighSens ? txt.highSensAnchor : txt.noHighSens}</div>
+                <div className="text-xs font-medium text-white/50 mb-1">{hasCoreAdv ? txt.coreAdvAnchor : txt.noCoreAdv}</div>
                 <div className="text-xl font-bold text-white mb-3">{mainAnchorName}</div>
-                {hasHighSens ? (
+                {hasCoreAdv ? (
                   <div className="space-y-3">
                     <div className="p-3 rounded-lg bg-white/10">
                       <div className="text-xs font-medium text-white/50 mb-1">{txt.ch3CoreNeed}</div>
@@ -1078,7 +1066,7 @@ export default function ComprehensiveReportPage() {
 
                   {/* Main anchor stage interpretation */}
                   <div className="p-5 rounded-xl mb-4" style={{ background: "linear-gradient(135deg, #0f4c5c 0%, #1a6b7a 100%)" }}>
-                    <div className="text-xs font-medium text-white/50 mb-1">{hasHighSens ? txt.highSensAnchor : txt.noHighSens} · {stageLabel}</div>
+                    <div className="text-xs font-medium text-white/50 mb-1">{hasCoreAdv ? txt.coreAdvAnchor : txt.noCoreAdv} · {stageLabel}</div>
                     <div className="text-lg font-bold text-white mb-4">{mainAnchorName}</div>
 
                     {/* Meaning */}

@@ -31,59 +31,7 @@ interface User {
   status: "active" | "pending" | "inactive";
 }
 
-// Mock user data
-const initialMockUsers: User[] = [
-  {
-    id: "U8847",
-    name: "张明",
-    email: "zhang.ming@example.com",
-    stage: "职场中期",
-    assessments: 3,
-    lastActive: "2026-02-08 14:32",
-    mainAnchor: "技术/专业能力型",
-    status: "active",
-  },
-  {
-    id: "U8846",
-    name: "李华",
-    email: "li.hua@example.com",
-    stage: "高管/创业者",
-    assessments: 5,
-    lastActive: "2026-02-08 13:45",
-    mainAnchor: "管理型",
-    status: "active",
-  },
-  {
-    id: "U8845",
-    name: "王芳",
-    email: "wang.fang@example.com",
-    stage: "职场新人",
-    assessments: 1,
-    lastActive: "2026-02-08 12:20",
-    mainAnchor: "自主/独立型",
-    status: "pending",
-  },
-  {
-    id: "U8844",
-    name: "陈强",
-    email: "chen.qiang@example.com",
-    stage: "职场中期",
-    assessments: 2,
-    lastActive: "2026-02-07 18:15",
-    mainAnchor: "安全/稳定型",
-    status: "active",
-  },
-  {
-    id: "U8843",
-    name: "刘洋",
-    email: "liu.yang@example.com",
-    stage: "HR/组织发展",
-    assessments: 8,
-    lastActive: "2026-02-07 16:42",
-    mainAnchor: "服务/奉献型",
-    status: "active",
-  },
-];
+
 
 const getStages = (language: Language) => {
   const stageMap: Record<Language, string[]> = {
@@ -102,7 +50,7 @@ const getStatusConfig = (t: (key: string) => string) => ({
 
 export default function AdminUsersPage() {
   const { t, language } = useTranslation();
-  const [users, setUsers] = useState<User[]>(initialMockUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -158,41 +106,15 @@ export default function AdminUsersPage() {
     if (!file) return;
 
     setIsImporting(true);
-    
-    // Simulate import process
-    setTimeout(() => {
-      const mockImportedUsers: User[] = [
-        {
-          id: `U${Math.floor(Math.random() * 10000)}`,
-          name: "导入用户1",
-          email: "import1@example.com",
-          stage: stages[0],
-          assessments: 0,
-          lastActive: new Date().toISOString().slice(0, 16).replace("T", " "),
-          mainAnchor: "-",
-          status: "pending",
-        },
-        {
-          id: `U${Math.floor(Math.random() * 10000)}`,
-          name: "导入用户2",
-          email: "import2@example.com",
-          stage: stages[1],
-          assessments: 0,
-          lastActive: new Date().toISOString().slice(0, 16).replace("T", " "),
-          mainAnchor: "-",
-          status: "pending",
-        },
-      ];
-      
-      setUsers([...mockImportedUsers, ...users]);
-      setIsImporting(false);
-      setShowImportModal(false);
-      toast.success(t("admin.importSuccess", { count: mockImportedUsers.length }));
-      
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }, 1500);
+
+    // TODO: Implement real CSV parsing and database import
+    toast.info(language === "en" ? "CSV import coming soon" : language === "zh-TW" ? "CSV 匯入功能即將推出" : "CSV 导入功能即将推出");
+    setIsImporting(false);
+    setShowImportModal(false);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleDownloadTemplate = () => {

@@ -159,7 +159,7 @@ export default function CceExportPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
           { label: { en: "Total Records", "zh-TW": "總記錄", "zh-CN": "总记录" }[langKey]!, value: exportData.length, color: "text-slate-600" },
           { label: { en: "Total CDU Hours", "zh-TW": "總 CDU 學時", "zh-CN": "总 CDU 学时" }[langKey]!, value: `${exportData.reduce((s, r) => s + r.totalApprovedCduHours, 0)}h`, color: "text-emerald-600" },

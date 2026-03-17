@@ -248,6 +248,86 @@
     }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Admin Console Mobile Responsive Overrides
+   All admin/org-admin/consultant/super-admin page content is
+   wrapped in .admin-page-content. These rules cascade into all
+   child pages so individual files do not need responsive prefixes.
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+  /* Stats cards: 4-col → 2-col */
+  .admin-page-content .grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Content panels: 3-col → 1-col */
+  .admin-page-content .grid-cols-3 {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+    gap: 0.75rem !important;
+  }
+
+  /* col-span overrides so items don't exceed single-col grid */
+  .admin-page-content .col-span-2 {
+    grid-column: span 1 !important;
+  }
+
+  /* Table containers: allow horizontal scroll */
+  .admin-page-content :has(> table) {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-page-content table {
+    min-width: 640px;
+  }
+
+  /* Page title bar: stack title + action button */
+  .admin-page-content > div > .flex.justify-between:first-child,
+  .admin-page-content > .flex.justify-between:first-child {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  /* Search + filter row: stack vertically */
+  .admin-page-content > div > .flex.gap-4:has(.relative.flex-1),
+  .admin-page-content > .flex.gap-4:has(.relative.flex-1) {
+    flex-direction: column;
+  }
+
+  /* Filter button rows: horizontal scroll */
+  .admin-page-content .flex.gap-2:has(> button) {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+
+  /* Tighten card padding */
+  .admin-page-content .p-5 {
+    padding: 0.75rem !important;
+  }
+  .admin-page-content .p-6 {
+    padding: 1rem !important;
+  }
+  .admin-page-content .px-5 {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  /* Page heading: smaller on mobile */
+  .admin-page-content h1 {
+    font-size: 1.25rem !important;
+  }
+
+  /* Shrink page margins */
+  .admin-page-content .mb-8 {
+    margin-bottom: 1.25rem !important;
+  }
+  .admin-page-content .mb-6 {
+    margin-bottom: 1rem !important;
+  }
+}
+
 @layer utilities {
     .field-sizing-content {
         field-sizing: content;
