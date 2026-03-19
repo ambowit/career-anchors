@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { callOOOKAI } from "../_shared/oook-ai-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -252,10 +253,7 @@ serve(async (req) => {
 
     logStep("Received request", { analysisType, mainAnchor: result.mainAnchor, coreAdvAnchors: result.coreAdvantageAnchors, language, workYears, isExecutive, isEntrepreneur, reportVersion, isEnterprise });
 
-    const apiKey = Deno.env.get("SUPERUN_API_KEY");
-    if (!apiKey) {
-      throw new Error("SUPERUN_API_KEY not configured");
-    }
+    // OOOK AI Gateway token is checked in oook-ai-client.ts
 
     const dimNames = DIMENSION_NAMES[language] || DIMENSION_NAMES["zh-CN"];
     const anchorMeanings = ANCHOR_CORE_MEANINGS[language] || ANCHOR_CORE_MEANINGS["zh-CN"];
@@ -456,7 +454,7 @@ serve(async (req) => {
         return `\n企業版內容規範（強制執行）：
 - 嚴格禁止使用「副業」「兼職創業」「副業專案」等詞彙
 - 替代用詞：「跨部門專案」「內部創新試點」「跨職能協作」
-- 嚴格禁止使用獨立的負面風險標籤（如「高風險」「危險區域」）
+- 嚴格禁止��用獨立的負面風險標籤（如「高風險」「危險區域」）
 - 替代框架：「發展注意事項」「關注領域」「成長重點」
 - 所有挑戰應框架為組織成長機會，而非個人缺陷
 - 用詞須符合台灣企業人才發展語境：使用「實習生」非「管培生」；使用「專案」非「项目」；使用「主管」非「领导」
@@ -1112,32 +1110,15 @@ ${stageInstructions}${enterpriseRules}`;
       userPrompt = `Generate career path suggestions for: ${mainAnchorName}`;
     }
 
-    logStep("Calling AI for analysis", { stage: stageKey, stageCode: stageDef.code });
+    logStep("Calling OOOK AI Gateway for analysis", { stage: stageKey, stageCode: stageDef.code });
 
-    const response = await fetch("https://gateway.superun.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.7,
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      logStep("AI API error", { status: response.status, error: errorText });
-      throw new Error(`AI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    let aiResponse = data.choices?.[0]?.message?.content || "";
+    let aiResponse = await callOOOKAI(
+      [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      { temperature: 0.7, maxCost: 0.05 }
+    );
 
     // Post-process: convert any remaining Simplified Chinese to Traditional for zh-TW
     if (isTW) {

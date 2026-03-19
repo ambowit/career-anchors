@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { callOOOKAI } from "../_shared/oook-ai-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -77,45 +78,25 @@ serve(async (req) => {
       conflictPairs: request.conflictPairs,
     });
 
-    const apiKey = Deno.env.get("SUPERUN_API_KEY");
-    if (!apiKey) {
-      // Fallback to rule-based decision if no AI
-      const fallbackResponse = makeRuleBasedDecision(request);
-      return new Response(JSON.stringify(fallbackResponse), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
-    }
-
     // Build AI prompt for intelligent decision
     const prompt = buildAdaptivePrompt(request);
     
-    logStep("Calling AI for adaptive decision");
+    logStep("Calling OOOK AI Gateway for adaptive decision");
 
-    const response = await fetch("https://gateway.superun.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gemini-2.5-flash",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.2,
-      })
-    });
-
-    if (!response.ok) {
-      logStep("AI API error, using fallback", { status: response.status });
+    let aiResponse: string;
+    try {
+      aiResponse = await callOOOKAI(
+        [{ role: "user", content: prompt }],
+        { temperature: 0.2, maxCost: 0.02 }
+      );
+    } catch (error) {
+      logStep("AI call failed, using fallback", { error: String(error) });
       const fallbackResponse = makeRuleBasedDecision(request);
       return new Response(JSON.stringify(fallbackResponse), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
     }
-
-    const data = await response.json();
-    const aiResponse = data.choices?.[0]?.message?.content || "";
     
     logStep("AI response received", { response: aiResponse.substring(0, 300) });
 

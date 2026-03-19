@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callOOOKAI } from "../_shared/oook-ai-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -132,38 +133,14 @@ serve(async (req) => {
     const prompt = buildAnalysisPrompt(batch, aggregatedData, completedResponses.length, completionRate, language);
     logStep("Prompt built", { length: prompt.length });
 
-    // Call AI
-    const apiKey = Deno.env.get("SUPERUN_API_KEY");
-    if (!apiKey) {
-      throw new Error("SUPERUN_API_KEY not configured");
-    }
-
-    const aiResponse = await fetch("https://gateway.superun.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gemini-2.5-flash",
-        messages: [
-          { role: "system", content: getSystemPrompt(language) },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 8000,
-      }),
-    });
-
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      logStep("AI error", { status: aiResponse.status, error: errorText });
-      throw new Error(`AI API returned ${aiResponse.status}`);
-    }
-
-    const aiData = await aiResponse.json();
-    const rawContent = aiData.choices?.[0]?.message?.content;
-    if (!rawContent) throw new Error("No AI content");
+    // Call OOOK AI Gateway
+    const rawContent = await callOOOKAI(
+      [
+        { role: "system", content: getSystemPrompt(language) },
+        { role: "user", content: prompt },
+      ],
+      { temperature: 0.7, max_tokens: 8000, maxCost: 0.06 }
+    );
 
     logStep("AI response received", { length: rawContent.length });
 
