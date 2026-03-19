@@ -1,4 +1,5 @@
 /** @type {import('tailwindcss').Config} */
+// Cache bust: force rebuild
 export default {
     darkMode: ["class"],
     content: [

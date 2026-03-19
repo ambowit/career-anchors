@@ -2,13 +2,19 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+// Force rebuild - clear all caches
+const timestamp = Date.now();
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  cacheDir: ".vite-cache",
+  root: process.cwd(),
+  cacheDir: `node_modules/.vite-${timestamp}`,
+  clearScreen: true,
   optimizeDeps: {
     include: ["lucide-react", "framer-motion", "recharts"],
     force: true,
+    entries: ["./src/**/*.tsx", "./src/**/*.ts"],
     esbuildOptions: {
       target: "esnext",
     },
@@ -16,6 +22,10 @@ export default defineConfig({
   server: {
     fs: {
       strict: false,
+      allow: [process.cwd()],
+    },
+    warmup: {
+      clientFiles: [],
     },
   },
   build: {
