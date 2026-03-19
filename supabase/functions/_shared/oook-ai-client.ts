@@ -43,7 +43,7 @@ export async function callOOOKAI(
     qualityTier?: 'economy' | 'balanced' | 'premium';
   } = {}
 ): Promise<string> {
-  const gatewayUrl = Deno.env.get("OOOK_AI_GATEWAY_URL") || "https://gateway.oook.cn/";
+  const gatewayUrl = Deno.env.get("OOOK_AI_GATEWAY_URL") || "https://gateway.oook.com/";
   const token = Deno.env.get("OOOK_AI_GATEWAY_TOKEN");
 
   if (!token) {

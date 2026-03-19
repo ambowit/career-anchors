@@ -5,8 +5,10 @@ import path from "path";
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  cacheDir: "node_modules/.vite",
   optimizeDeps: {
     include: ["lucide-react", "framer-motion", "recharts"],
+    force: true,
   },
   build: {
     target: "esnext",
