@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { callOOOKAI } from "../_shared/oook-ai-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,7 +118,7 @@ const STAGE_DEFINITIONS: Record<string, Record<string, { label: string; descript
     },
     mid: {
       label: "职业中前期（6-10年）",
-      description: "方向逐渐清晰，能力已被验证，正在巩固核心方向",
+      description: "方向逐渐清晰，能力已被验证，正在巩固核���方向",
       instruction: "解读时强调方向巩固：排序结构已有稳定趋势，可以做较为明确的结构化解读。关注价值观与实际选择的一致性，提供方向性测试建议。"
     },
     senior: {
@@ -595,37 +596,17 @@ serve(async (req) => {
         );
       }
 
-      const apiKey = Deno.env.get("SUPERUN_API_KEY");
-      if (!apiKey) throw new Error("SUPERUN_API_KEY not configured");
-
       const descSystemPrompt = buildCardDescriptionSystemPrompt(descLang);
       const descUserPrompt = buildCardDescriptionUserPrompt(cards, descLang);
 
-      const descResponse = await fetch("https://gateway.superun.ai/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gemini-2.5-flash",
-          messages: [
-            { role: "system", content: descSystemPrompt },
-            { role: "user", content: descUserPrompt },
-          ],
-          temperature: 0.5,
-          max_tokens: 4096,
-        }),
-      });
-
-      if (!descResponse.ok) {
-        const errorText = await descResponse.text();
-        logStep("AI API error (descriptions)", { status: descResponse.status, error: errorText });
-        throw new Error(`AI API error: ${descResponse.status}`);
-      }
-
-      const descData = await descResponse.json();
-      let descAiText = descData.choices?.[0]?.message?.content || "";
+      // Call OOOK AI Gateway for card descriptions
+      let descAiText = await callOOOKAI(
+        [
+          { role: "system", content: descSystemPrompt },
+          { role: "user", content: descUserPrompt },
+        ],
+        { temperature: 0.5, max_tokens: 4096, maxCost: 0.03 }
+      );
 
       if (descLang === "zh-TW") {
         descAiText = convertToTraditional(descAiText);
@@ -677,41 +658,19 @@ serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get("SUPERUN_API_KEY");
-    if (!apiKey) {
-      throw new Error("SUPERUN_API_KEY not configured");
-    }
-
     const systemPrompt = buildSystemPrompt(language, user_stage);
     const userPrompt = buildUserPrompt(top10_cards, user_stage, age, optional_notes, language, quadrant_contents);
 
-    logStep("Calling AI for 10-module analysis", { stage: user_stage, language });
+    logStep("Calling OOOK AI Gateway for 10-module analysis", { stage: user_stage, language });
 
-    const response = await fetch("https://gateway.superun.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 16384,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      logStep("AI API error", { status: response.status, error: errorText });
-      throw new Error(`AI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    let aiResponse = data.choices?.[0]?.message?.content || "";
+    // Call OOOK AI Gateway
+    let aiResponse = await callOOOKAI(
+      [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      { temperature: 0.7, max_tokens: 16384, maxCost: 0.1 }
+    );
 
     // Post-process: convert any remaining Simplified Chinese to Traditional for zh-TW
     if (language === "zh-TW") {
