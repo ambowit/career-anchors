@@ -7,12 +7,26 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   BarChart3,
-  Target
+  Target,
+  Award,
+  Coins
 } from "lucide-react";
 import { useTranslation } from "@/hooks/useLanguage";
+import { 
+  useCertificationTypes, 
+  useCpPackages, 
+  useAssessmentQuestions,
+  getLocalizedName,
+  getLocalizedDescription 
+} from "@/hooks/useSeedData";
 
 export default function AdminDashboardPage() {
   const { t, language } = useTranslation();
+  
+  // Fetch real data from database
+  const { data: certificationTypes, isLoading: loadingCerts } = useCertificationTypes();
+  const { data: cpPackages, isLoading: loadingPackages } = useCpPackages();
+  const { data: questions, isLoading: loadingQuestions } = useAssessmentQuestions();
 
   const stats = [
     {
@@ -24,25 +38,25 @@ export default function AdminDashboardPage() {
       color: "hsl(75, 55%, 50%)",
     },
     {
-      labelKey: "weeklyNew",
-      value: "342",
-      change: "+8.2%",
+      labelKey: "certificationTypes",
+      value: loadingCerts ? "..." : String(certificationTypes?.length || 0),
+      change: certificationTypes?.length ? `+${certificationTypes.length}` : "0",
       trend: "up",
-      icon: TrendingUp,
+      icon: Award,
       color: "hsl(200, 80%, 50%)",
     },
     {
-      labelKey: "avgTime",
-      value: language === "en" ? "18.5 min" : language === "zh-TW" ? "18.5 分鐘" : "18.5 分钟",
-      change: "-2.3%",
-      trend: "down",
-      icon: Clock,
+      labelKey: "cpPackages",
+      value: loadingPackages ? "..." : String(cpPackages?.length || 0),
+      change: cpPackages?.length ? `${cpPackages.length} 種` : "0",
+      trend: "up",
+      icon: Coins,
       color: "hsl(280, 60%, 55%)",
     },
     {
       labelKey: "questionCount",
-      value: "156",
-      change: "+5",
+      value: loadingQuestions ? "..." : String(questions?.length || 0),
+      change: questions?.length ? `+${questions.length}` : "0",
       trend: "up",
       icon: FileQuestion,
       color: "hsl(35, 90%, 55%)",
@@ -145,6 +159,133 @@ export default function AdminDashboardPage() {
             <div className="text-sm text-muted-foreground">{t(`admin.${stat.labelKey}`)}</div>
           </motion.div>
         ))}
+      </div>
+
+      {/* Certification Types & CP Packages */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Certification Types */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-card border border-border rounded-xl p-6"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: "hsl(200, 80%, 50%, 0.15)", color: "hsl(200, 80%, 45%)" }}
+            >
+              <Award className="w-4 h-4" />
+            </div>
+            <h3 className="font-semibold text-foreground">
+              {language === "en" ? "Certification Types" : language === "zh-TW" ? "認證類型" : "认证类型"}
+            </h3>
+          </div>
+          
+          {loadingCerts ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {certificationTypes?.map((cert, index) => (
+                <div key={cert.id} className="flex items-center justify-between p-3 bg-muted/10 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                      style={{ 
+                        backgroundColor: `hsl(${200 + index * 40}, 70%, 50%)`,
+                        color: "white"
+                      }}
+                    >
+                      L{cert.level}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-foreground">
+                        {cert.type_code} - {getLocalizedName(cert, language)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {language === "en" 
+                          ? `${cert.validity_years} years • ${cert.cdu_requirement} CDU`
+                          : language === "zh-TW"
+                            ? `${cert.validity_years} 年效期 • ${cert.cdu_requirement} CDU`
+                            : `${cert.validity_years} 年有效期 • ${cert.cdu_requirement} CDU`
+                        }
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm font-semibold text-foreground">
+                    NT${cert.price_ntd.toLocaleString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+
+        {/* CP Packages */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          className="bg-card border border-border rounded-xl p-6"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: "hsl(280, 60%, 55%, 0.15)", color: "hsl(280, 60%, 50%)" }}
+            >
+              <Coins className="w-4 h-4" />
+            </div>
+            <h3 className="font-semibold text-foreground">
+              {language === "en" ? "CP Packages" : language === "zh-TW" ? "CP 方案" : "CP 方案"}
+            </h3>
+          </div>
+          
+          {loadingPackages ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {cpPackages?.map((pkg, index) => (
+                <div key={pkg.id} className="flex items-center justify-between p-3 bg-muted/10 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold"
+                      style={{ 
+                        backgroundColor: `hsl(${280 + index * 25}, 60%, 55%)`,
+                        color: "white"
+                      }}
+                    >
+                      {pkg.cp_amount}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-foreground">
+                        {getLocalizedName(pkg, language)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {pkg.bonus_cp > 0 && (
+                          <span className="text-green-600">
+                            +{pkg.bonus_cp} {language === "en" ? "bonus" : language === "zh-TW" ? "贈送" : "赠送"}
+                          </span>
+                        )}
+                        {pkg.discount_percent > 0 && (
+                          <span className="text-amber-600 ml-2">
+                            {pkg.discount_percent}% {language === "en" ? "off" : language === "zh-TW" ? "折扣" : "折扣"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm font-semibold text-foreground">
+                    NT${pkg.price_ntd.toLocaleString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
       </div>
 
       {/* Main Content Grid */}
