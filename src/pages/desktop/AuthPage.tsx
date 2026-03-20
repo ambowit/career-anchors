@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -7,11 +7,24 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Shield, Building2, Globe } from "lucide-react";
 import { useTranslation } from "@/hooks/useLanguage";
+import { getConsolePath, isConsoleRoleType, type RoleType } from "@/lib/permissions";
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
+  const { user, profile, signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
   const { language } = useTranslation();
+  
+  // Redirect authenticated users to appropriate console
+  useEffect(() => {
+    if (user && profile) {
+      const roleType = profile.role_type as RoleType;
+      if (isConsoleRoleType(roleType)) {
+        navigate(getConsolePath(roleType), { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
+    }
+  }, [user, profile, navigate]);
   
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -33,8 +46,7 @@ export default function AuthPage() {
           toast.error(language === "en" ? "Login failed" : language === "zh-TW" ? "登入失敗" : "登录失败", { description: error.message });
         } else {
           toast.success(language === "en" ? "Logged in" : language === "zh-TW" ? "登入成功" : "登录成功");
-          // Always navigate to home first; users can switch to admin console manually
-          navigate("/");
+          // useEffect will handle redirect once profile loads
         }
       } else {
         const { error } = await signUpWithEmail(email, password, fullName);
@@ -42,7 +54,7 @@ export default function AuthPage() {
           toast.error(language === "en" ? "Signup failed" : language === "zh-TW" ? "註冊失敗" : "注册失败", { description: error.message });
         } else {
           toast.success(language === "en" ? "Account created" : language === "zh-TW" ? "註冊成功" : "注册成功", { description: language === "en" ? "Welcome to SCPC Career Anchor Assessment" : language === "zh-TW" ? "歡迎使用 SCPC 職業錨測評" : "欢迎使用 SCPC 职业锚测评" });
-          navigate("/");
+          // useEffect will handle redirect once profile loads
         }
       }
     } finally {
