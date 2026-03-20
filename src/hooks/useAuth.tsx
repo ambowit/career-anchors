@@ -48,14 +48,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async (userId: string) => {
+    console.log("[v0] fetchProfile called with userId:", userId);
     const { data, error } = await supabase
       .from("profiles")
       .select("id, email, full_name, avatar_url, role_type, organization_id, department_id, consultant_id, phone, status, career_stage, work_experience_years, role, additional_roles")
       .eq("id", userId)
       .single();
     
+    console.log("[v0] fetchProfile result - data:", data, "error:", error);
     if (!error && data) {
+      console.log("[v0] Setting profile with role_type:", data.role_type);
       setProfile(data as Profile);
+    } else if (error) {
+      console.error("[v0] fetchProfile error:", error.message);
     }
   }, []);
 
