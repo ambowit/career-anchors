@@ -16,11 +16,17 @@ export default function AuthPage() {
   
   // Redirect authenticated users to appropriate console
   useEffect(() => {
+    console.log("[v0] AuthPage redirect check - user:", !!user, "profile:", profile, "role_type:", profile?.role_type);
     if (user && profile) {
       const roleType = profile.role_type as RoleType;
-      if (isConsoleRoleType(roleType)) {
-        navigate(getConsolePath(roleType), { replace: true });
+      const isConsole = isConsoleRoleType(roleType);
+      const path = getConsolePath(roleType);
+      console.log("[v0] Role check - roleType:", roleType, "isConsoleRoleType:", isConsole, "path:", path);
+      if (isConsole) {
+        console.log("[v0] Navigating to:", path);
+        navigate(path, { replace: true });
       } else {
+        console.log("[v0] Navigating to home");
         navigate("/", { replace: true });
       }
     }
